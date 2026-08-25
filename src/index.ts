@@ -1,7 +1,6 @@
 import { encode, decode } from '@msgpack/msgpack'
 import {
   Context,
-  TransactOptions,
   OriginSocketEventMap,
   OriginSocketEventListenerFor,
   TransactionPromise,
@@ -340,7 +339,7 @@ export class OriginSocket<
 
               if (ctx?.kind === 'subscribe') {
                 if (ctx?.from === 'server') {
-                  return void this.upstreamTopics!.add(ctx.topic as Topic)
+                  return void this.upstreamTopics!.set(ctx.topic as Topic, 1)
                 }
                 return
               }
@@ -400,7 +399,7 @@ export class OriginSocket<
     listener: OriginSocketEventListenerFor<Gossip, K> | null,
     options?: boolean | AddEventListenerOptions
   ): void {
-    this.eventTarget.addEventListener(
+    void this.eventTarget.addEventListener(
       type,
       listener as EventListenerOrEventListenerObject | null,
       options
@@ -419,7 +418,7 @@ export class OriginSocket<
     listener: OriginSocketEventListenerFor<Gossip, K> | null,
     options?: boolean | EventListenerOptions
   ): void {
-    this.eventTarget.removeEventListener(
+    void this.eventTarget.removeEventListener(
       type,
       listener as EventListenerOrEventListenerObject | null,
       options
