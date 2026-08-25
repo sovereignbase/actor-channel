@@ -30,9 +30,12 @@ export class OriginSocket<
 
   private readonly upstreamQueue:
     Array<Context<RPCRequest | RPCResponse | Gossip | Topic>> | undefined
-  private readonly upstreamTopics: Set<Topic> | undefined
+  private readonly upstreamTopics: Map<Topic, number> | undefined
 
-  private readonly myTransacts = new Map<string, TransactionPromise>()
+  private readonly myTransacts = new Map<
+    string,
+    TransactionPromise<RPCResponse>
+  >()
   private readonly myTopics: Set<Topic> = new Set()
 
   /**
@@ -73,13 +76,13 @@ export class OriginSocket<
       if (ctx.kind === 'transact') {
         if (ctx.phase === 'request') {
           if (!this.isLeader) return
-          else this.sendUpstream(ctx)
+          else void this.sendUpstream(ctx)
         }
         if (ctx.phase === 'response') {
           const transaction = this.myTransacts.get(ctx.id)
           if (!transaction) return
 
-          this.myTransacts.delete(ctx.id)
+          void this.myTransacts.delete(ctx.id)
           return
         }
         return
@@ -369,39 +372,20 @@ export class OriginSocket<
    * Closes the client and releases its local and remote resources.
    */
   close(): void {
-    const wasLeader = this.isLeader
-    const broadcastChannel = this.broadcastChannel
     this.isClosed = true
-    self.removeEventListener('online', this.onlineHandler)
-
-    if (!wasLeader) {
-      for (const id of this.myTransacts.keys()) {
-        try {
-          broadcastChannel?.postMessage({ kind: 'fetch-abort', id })
-        } catch {}
-      }
-    }
+    void self.removeEventListener('online', this.onlineHandler)
 
     try {
-      broadcastChannel?.close()
-    } catch {}
-    try {
-      this.webSocket?.close(1000, 'closed')
+      void this.myTopics.clear()
+      void this.myTransacts.clear()
+      void this.broadcastChannel.close()
     } catch {}
 
-    this.broadcastChannel = null
-    this.webSocket = null
-    this.isLeader = false
-    this.upstreamQueue!.length = 0
-    for (const pending of this.upstreamQueue!.values()) {
-      pending.cleanup()
-      pending.reject(new Error('Station client closed'))
+    if (this.isLeader) {
+      try {
+        void this.webSocket?.close(1000, 'closed')
+      } catch {}
     }
-    this.upstreamQueue!.clear()
-    for (const pendingTarget of this.pendingfetchTargets.values()) {
-      clearTimeout(pendingTarget.timeoutId)
-    }
-    this.pendingfetchTargets.clear()
   }
 
   /**
@@ -411,9 +395,9 @@ export class OriginSocket<
    * @param listener The callback that receives the event.
    * @param options An options object that specifies characteristics about the event listener.
    */
-  addEventListener<K extends keyof OriginSocketEventMap<T>>(
+  addEventListener<K extends keyof OriginSocketEventMap<Gossip>>(
     type: K,
-    listener: OriginSocketEventListenerFor<T, K> | null,
+    listener: OriginSocketEventListenerFor<Gossip, K> | null,
     options?: boolean | AddEventListenerOptions
   ): void {
     this.eventTarget.addEventListener(
@@ -430,9 +414,9 @@ export class OriginSocket<
    * @param listener The callback to remove.
    * @param options An options object that specifies characteristics about the event listener.
    */
-  removeEventListener<K extends keyof OriginSocketEventMap<T>>(
+  removeEventListener<K extends keyof OriginSocketEventMap<Gossip>>(
     type: K,
-    listener: OriginSocketEventListenerFor<T, K> | null,
+    listener: OriginSocketEventListenerFor<Gossip, K> | null,
     options?: boolean | EventListenerOptions
   ): void {
     this.eventTarget.removeEventListener(
