@@ -1,4 +1,4 @@
-export type RPC<T> =
+export type Context<T> =
   | {
       kind: 'gossip'
       topic: string
