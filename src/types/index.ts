@@ -3,6 +3,7 @@ export type RPC<T> =
       kind: 'gossip'
       topic: string
       payload: T
+      from: 'server' | 'client'
     }
   | {
       kind: 'invoke'
@@ -13,6 +14,7 @@ export type RPC<T> =
       id: string
       payload: T
       phase: 'request' | 'response'
+      from: 'server' | 'client'
     }
   | {
       kind: 'subscribe'

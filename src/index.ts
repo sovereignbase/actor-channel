@@ -1,12 +1,15 @@
 import { encode, decode } from '@msgpack/msgpack'
+import { Context } from './types/index.js'
 
-export class OriginSocket<T> {
+export class OriginSocket<
+  Topic extends string,
+  Gossip,
+  RPCRequest,
+  RPCResponse,
+> {
   private readonly eventTarget = new EventTarget()
-  private readonly lockName: string
-  private readonly channelName: string
   private readonly webSocketUrl: string
-  private readonly instanceId = self.crypto.randomUUID()
-  private readonly onlineHandler = () => {
+  private readonly onlineHandler = async () => {
     void this.upstreamConnect()
   }
   private broadcastChannel: BroadcastChannel | null = null
@@ -14,15 +17,12 @@ export class OriginSocket<T> {
   private isLeader: boolean = false
   private isClosed: boolean = false
   private isConnecting: boolean = false
-  private readonly upstreamQueue: StationClientRemoteMessageShape<T>[] = []
-  private readonly pendingfetchs = new Map<
-    string,
-    StationClientPendingFetch<T>
-  >()
-  private readonly pendingfetchTargets = new Map<
-    string,
-    StationClientPendingFetchTarget
-  >()
+  private readonly upstreamQueue: Array<Context<RPCRequest>> | undefined
+  private readonly upstreamTopics: Set<Topic> | undefined
+  private readonly upstreamTransacts = new Map<string, string>()
+
+  private readonly myTransacts = new Map<string, Promise<RPCResponse>>()
+  private readonly myTopics: Set<Topic> = new Set()
 
   /**
    * Initializes a new {@link StationClient} instance.
@@ -31,116 +31,97 @@ export class OriginSocket<T> {
    */
   constructor(webSocketUrl: string = '') {
     this.webSocketUrl = webSocketUrl
-    this.channelName = `origin-channel-lock::${this.webSocketUrl}`
-    this.lockName = `origin-channel-lock::${this.webSocketUrl}`
 
-    this.broadcastChannel = new BroadcastChannel(this.channelName)
+    this.broadcastChannel = new BroadcastChannel(
+      '@sovereignbase/origin-socket:channel'
+    )
     this.broadcastChannel.onmessage = (
-      event: MessageEvent<StationClientLocalMessageShape<T>>
+      event: MessageEvent<Context<RPCRequest | RPCResponse | Gossip>>
     ) => {
-      const envelope = event.data
-      if (!envelope) return
+      const rpc = event.data
+      if (!rpc) return
 
-      if (envelope.kind === 'post') {
-        this.eventTarget.dispatchEvent(
-          new CustomEvent('message', { detail: envelope.message })
+      if (rpc.kind === 'invoke') {
+        if (!this.isLeader) return
+        void this.sendUpstream(rpc)
+        return
+      }
+
+      if (rpc.kind === 'gossip') {
+        if (rpc.from === 'client' && this.isLeader) void this.sendUpstream(rpc)
+
+        if (!this.myTopics.has(rpc.topic as Topic)) return
+
+        return void this.eventTarget.dispatchEvent(
+          new CustomEvent('gossip', { detail: rpc.payload as Gossip })
         )
-        if (!this.isLeader) return
-
-        this.sendUpstream(envelope.message)
-        return
       }
 
-      if (envelope.kind === 'fetch-response') {
-        if (envelope.target !== this.instanceId) return
+      if (rpc.kind === 'transact') {
+        if (rpc.phase === 'request') {
+          if (!this.isLeader) return
+          else this.sendUpstream(rpc)
+        }
+        if (rpc.phase === 'response') {
+          const transaction = this.myTransacts.get(rpc.id)
+          if (!transaction) return
 
-        const pending = this.pendingfetchs.get(envelope.id)
-        if (!pending) return
-
-        this.pendingfetchs.delete(envelope.id)
-        pending.cleanup()
-        pending.resolve(envelope.message)
+          this.myTransacts.delete(rpc.id)
+          return
+        }
         return
       }
-
-      if (envelope.kind === 'fetch-abort') {
-        if (!this.isLeader) return
-
-        const pendingTarget = this.pendingfetchTargets.get(envelope.id)
-        if (pendingTarget) clearTimeout(pendingTarget.timeoutId)
-        this.pendingfetchTargets.delete(envelope.id)
-        return
-      }
-
-      if (!this.isLeader) return
-
-      if (
-        !this.webSocketUrl ||
-        self.navigator.onLine !== true ||
-        !this.webSocket ||
-        this.webSocket.readyState !== WebSocket.OPEN
-      ) {
-        this.broadcastChannel?.postMessage({
-          kind: 'fetch-response',
-          id: envelope.id,
-          target: envelope.source,
-          message: false,
-        })
-        return
-      }
-
-      const pendingTarget = this.pendingfetchTargets.get(envelope.id)
-      if (pendingTarget) clearTimeout(pendingTarget.timeoutId)
-
-      this.pendingfetchTargets.set(envelope.id, {
-        target: envelope.source,
-        timeoutId: setTimeout(() => {
-          this.pendingfetchTargets.delete(envelope.id)
-        }, envelope.ttlMs ?? 30_000),
-      })
-      this.sendUpstream([
-        'station-client-request',
-        envelope.id,
-        envelope.message,
-      ])
     }
 
-    if (this.webSocketUrl && navigator.onLine) void this.opportunisticConnect()
+    if (this.webSocketUrl && navigator.onLine) void this.upstreamConnect()
     if (this.webSocketUrl) {
-      self.addEventListener('online', this.onlineHandler)
+      void self.addEventListener('online', this.onlineHandler)
     }
   }
-  gossip(): void {}
 
   /**
    * Broadcasts a message to other same-origin contexts and opportunistically forwards it to the base station.
    *
    * @param message The message to broadcast.
    */
-  invoke(message: T) {
+  invoke(payload: RPCRequest): void {
     if (this.isClosed) return
 
-    this.broadcastChannel?.postMessage({ kind: 'post', message })
-    this.sendUpstream(message)
+    if (this.isLeader)
+      return void this.sendUpstream({ kind: 'invoke', payload })
+
+    return void this.broadcastChannel?.postMessage({ kind: 'invoke', payload })
+  }
+
+  gossip(topic: Topic, payload: Gossip): void {
+    if (this.isClosed) return
+
+    const context: Context<Gossip> = {
+      kind: 'gossip',
+      from: 'client',
+      topic,
+      payload,
+    }
+
+    if (this.isLeader) void this.sendUpstream(context)
+
+    return void this.broadcastChannel?.postMessage(context)
   }
 
   /**
-   * Sends a request to the base station and resolves with the corresponding response message.
+   * Sends a RPCRequest to the base station and resolves with the corresponding response message.
    *
    * @param message The message to send.
    * @param options Options that control cancellation and stale follower cleanup.
-   * @returns A promise that resolves with the response message, or `false` when the request cannot be issued.
+   * @returns A promise that resolves with the response message, or `false` when the RPCRequest cannot be issued.
    */
-  transact(
-    message: T,
-    options: StationClientFetchOptions = {}
-  ): Promise<T | false> {
+  transact(payload: RPCRequest): Promise<RPCResponse | false> {
     if (this.isClosed) return Promise.resolve(false)
 
-    const id = self.crypto.randomUUID()
+    const transactionId = crypto.randomUUID()
     const { signal, ttlMs } = options
 
-    return new Promise<T | false>((resolve, reject) => {
+    return new Promise<RPCResponse | false>((resolve, reject) => {
       const abortReason = () =>
         signal?.reason ??
         new DOMException('The operation was aborted.', 'AbortError')
@@ -187,7 +168,7 @@ export class OriginSocket<T> {
       signal?.addEventListener('abort', handleAbort, { once: true })
 
       if (this.isLeader) {
-        this.sendUpstream(['station-client-request', id, message])
+        this.sendUpstream(['station-client-RPCRequest', id, message])
         return
       }
 
@@ -206,20 +187,20 @@ export class OriginSocket<T> {
   unsubscribe(): void {}
 
   //HELPER
-  private sendUpstream(message: StationClientRemoteMessageShape<T>) {
+  private sendUpstream(rpc: RPC<RPCRequest | RPCResponse | Gossip | Topic>) {
     if (!this.isLeader || !this.webSocketUrl) return
 
     if (!this.webSocket || this.webSocket.readyState !== WebSocket.OPEN) {
       if (self.navigator.onLine) {
         // Limit outbound queue to 64 entries
-        if (this.upstreamQueue.length >= 64) this.upstreamQueue.shift()
-        this.upstreamQueue.push(message)
+        if (this.upstreamQueue!.length >= 64) this.upstreamQueue!.shift()
+        this.upstreamQueue!.push(rpc)
       }
       return
     }
 
     try {
-      this.webSocket.send(encode(message))
+      this.webSocket.send(encode(rpc))
     } catch {}
   }
 
@@ -249,8 +230,8 @@ export class OriginSocket<T> {
       while (!this.isClosed) {
         if (self.navigator.onLine !== true) return
 
-        await self.navigator.locks.request(
-          'origin-socket-leader',
+        await self.navigator.locks.RPCRequest(
+          '@sovereignbase/origin-socket:leader',
           { ifAvailable: true },
           async (lockHandle) => {
             if (!lockHandle || this.isClosed) return
@@ -415,3 +396,5 @@ export class OriginSocket<T> {
     )
   }
 }
+
+export * from './types/index.js'
