@@ -1,13 +1,13 @@
 export type Context<T> =
   | {
+      kind: 'invoke'
+      payload: T
+    }
+  | {
       kind: 'gossip'
       topic: string
       payload: T
       from: 'server' | 'client'
-    }
-  | {
-      kind: 'invoke'
-      payload: T
     }
   | {
       kind: 'transact'
@@ -32,6 +32,7 @@ export type Context<T> =
  */
 export type OriginSocketEventMap<Gossip> = {
   gossip: Gossip
+  signal: null
 }
 
 /**

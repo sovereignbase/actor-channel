@@ -431,10 +431,11 @@ export function serverHandle<
   Gossip,
   RPCRequest,
   RPCResponse,
->(buffer: ArrayBuffer) {
+>(buffer: ArrayBuffer): Context<Topic | Gossip | RPCRequest | RPCResponse> {
   const ctx = decode(buffer) as Context<
     Topic | Gossip | RPCRequest | RPCResponse
   >
+  return ctx
 }
 
 export * from './types/index.js'
