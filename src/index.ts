@@ -1,5 +1,5 @@
 import { encode, decode } from '@msgpack/msgpack'
-import { Context } from './types/index.js'
+import { Context, TransactOptions } from './types/index.js'
 
 export class OriginSocket<
   Topic extends string,
@@ -17,6 +17,8 @@ export class OriginSocket<
   private isLeader: boolean = false
   private isClosed: boolean = false
   private isConnecting: boolean = false
+  private readonly originTopics: Set<Topic> = new Set()
+
   private readonly upstreamQueue: Array<Context<RPCRequest>> | undefined
   private readonly upstreamTopics: Set<Topic> | undefined
   private readonly upstreamTransacts = new Map<string, string>()
@@ -38,38 +40,40 @@ export class OriginSocket<
     this.broadcastChannel.onmessage = (
       event: MessageEvent<Context<RPCRequest | RPCResponse | Gossip>>
     ) => {
-      const rpc = event.data
-      if (!rpc) return
+      const ctx = event.data
+      if (!ctx) return
 
-      if (rpc.kind === 'invoke') {
+      if (ctx.kind === 'invoke') {
         if (!this.isLeader) return
-        void this.sendUpstream(rpc)
+        void this.sendUpstream(ctx)
         return
       }
 
-      if (rpc.kind === 'gossip') {
-        if (rpc.from === 'client' && this.isLeader) void this.sendUpstream(rpc)
+      if (ctx.kind === 'gossip') {
+        if (ctx.from === 'client' && this.isLeader) void this.sendUpstream(ctx)
 
-        if (!this.myTopics.has(rpc.topic as Topic)) return
+        if (!this.myTopics.has(ctx.topic as Topic)) return
 
         return void this.eventTarget.dispatchEvent(
-          new CustomEvent('gossip', { detail: rpc.payload as Gossip })
+          new CustomEvent('gossip', { detail: ctx.payload as Gossip })
         )
       }
 
-      if (rpc.kind === 'transact') {
-        if (rpc.phase === 'request') {
+      if (ctx.kind === 'transact') {
+        if (ctx.phase === 'request') {
           if (!this.isLeader) return
-          else this.sendUpstream(rpc)
+          else this.sendUpstream(ctx)
         }
-        if (rpc.phase === 'response') {
-          const transaction = this.myTransacts.get(rpc.id)
+        if (ctx.phase === 'response') {
+          const transaction = this.myTransacts.get(ctx.id)
           if (!transaction) return
 
-          this.myTransacts.delete(rpc.id)
+          this.myTransacts.delete(ctx.id)
           return
         }
         return
+      }
+      if (ctx.kind === 'subscribe') {
       }
     }
 
@@ -115,7 +119,10 @@ export class OriginSocket<
    * @param options Options that control cancellation and stale follower cleanup.
    * @returns A promise that resolves with the response message, or `false` when the RPCRequest cannot be issued.
    */
-  transact(payload: RPCRequest): Promise<RPCResponse | false> {
+  transact(
+    payload: RPCRequest,
+    options?: TransactOptions
+  ): Promise<RPCResponse | false> {
     if (this.isClosed) return Promise.resolve(false)
 
     const transactionId = crypto.randomUUID()
@@ -182,25 +189,57 @@ export class OriginSocket<
     })
   }
 
-  subscribe(): void {}
+  subscribe(topic: Topic): void {
+    if (this.isClosed) return
 
-  unsubscribe(): void {}
+    void this.myTopics.add(topic)
+
+    const context: Context<Topic> = {
+      kind: 'subscribe',
+      topic,
+      from: 'client',
+    }
+
+    if (this.isLeader) void this.sendUpstream(context)
+
+    return void this.broadcastChannel?.postMessage(context)
+  }
+
+  unsubscribe(topic: Topic): void {
+    if (this.isClosed) return
+
+    void this.myTopics.delete(topic)
+
+    const context: Context<Topic> = {
+      kind: 'unsubscribe',
+      topic,
+      from: 'client',
+    }
+
+    if (this.isLeader) {
+      void this.sendUpstream(context)
+    }
+
+    return void this.broadcastChannel?.postMessage(context)
+  }
 
   //HELPER
-  private sendUpstream(rpc: RPC<RPCRequest | RPCResponse | Gossip | Topic>) {
+  private sendUpstream(
+    context: Context<RPCRequest | RPCResponse | Gossip | Topic>
+  ) {
     if (!this.isLeader || !this.webSocketUrl) return
 
     if (!this.webSocket || this.webSocket.readyState !== WebSocket.OPEN) {
       if (self.navigator.onLine) {
         // Limit outbound queue to 64 entries
         if (this.upstreamQueue!.length >= 64) this.upstreamQueue!.shift()
-        this.upstreamQueue!.push(rpc)
+        this.upstreamQueue!.push(context)
       }
       return
     }
 
     try {
-      this.webSocket.send(encode(rpc))
+      this.webSocket.send(encode(context))
     } catch {}
   }
 
@@ -230,7 +269,7 @@ export class OriginSocket<
       while (!this.isClosed) {
         if (self.navigator.onLine !== true) return
 
-        await self.navigator.locks.RPCRequest(
+        await self.navigator.locks.request(
           '@sovereignbase/origin-socket:leader',
           { ifAvailable: true },
           async (lockHandle) => {
@@ -329,7 +368,7 @@ export class OriginSocket<
     self.removeEventListener('online', this.onlineHandler)
 
     if (!wasLeader) {
-      for (const id of this.pendingfetchs.keys()) {
+      for (const id of this.myTransacts.keys()) {
         try {
           broadcastChannel?.postMessage({ kind: 'fetch-abort', id })
         } catch {}
@@ -365,9 +404,9 @@ export class OriginSocket<
    * @param listener The callback that receives the event.
    * @param options An options object that specifies characteristics about the event listener.
    */
-  addEventListener<K extends keyof StationClientEventMap<T>>(
+  addEventListener<K extends keyof OriginSocketEventMap<T>>(
     type: K,
-    listener: StationClientEventListenerFor<T, K> | null,
+    listener: OriginSocketEventListenerFor<T, K> | null,
     options?: boolean | AddEventListenerOptions
   ): void {
     this.eventTarget.addEventListener(
@@ -384,9 +423,9 @@ export class OriginSocket<
    * @param listener The callback to remove.
    * @param options An options object that specifies characteristics about the event listener.
    */
-  removeEventListener<K extends keyof StationClientEventMap<T>>(
+  removeEventListener<K extends keyof OriginSocketEventMap<T>>(
     type: K,
-    listener: StationClientEventListenerFor<T, K> | null,
+    listener: OriginSocketEventListenerFor<T, K> | null,
     options?: boolean | EventListenerOptions
   ): void {
     this.eventTarget.removeEventListener(
@@ -395,6 +434,17 @@ export class OriginSocket<
       options
     )
   }
+}
+
+export function serverHandle<
+  Topic extends string,
+  Gossip,
+  RPCRequest,
+  RPCResponse,
+>(buffer: ArrayBuffer) {
+  const ctx = decode(buffer) as Context<
+    Topic | Gossip | RPCRequest | RPCResponse
+  >
 }
 
 export * from './types/index.js'

@@ -19,8 +19,15 @@ export type Context<T> =
   | {
       kind: 'subscribe'
       topic: string
+      from: 'server' | 'client'
     }
   | {
       kind: 'unsubscribe'
       topic: string
+      from: 'server' | 'client'
     }
+
+export type TransactOptions = {
+  signal: AbortSignal
+  ttlMs: number
+}
