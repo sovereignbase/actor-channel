@@ -60,5 +60,8 @@
   "bugs": {
     "url": "https://github.com/sovereignbase/package-name/issues"
   },
-  "homepage": "https://sovereignbase.dev/package-name"
+  "homepage": "https://sovereignbase.dev/package-name",
+  "dependencies": {
+    "@msgpack/msgpack": "^3.1.3"
+  }
 }
