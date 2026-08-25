@@ -318,7 +318,7 @@ export class OriginSocket<
 
             socket.onmessage = (event: MessageEvent<ArrayBuffer>) => {
               const ctx = decode(event.data) as Context<unknown>
-              if (!ctx) return
+              if (ctx === undefined || typeof ctx !== 'object') return
 
               if (ctx?.kind === 'transact') {
                 const transaction = this.myTransacts.get(ctx.id)
