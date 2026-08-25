@@ -4,6 +4,7 @@ import {
   TransactOptions,
   OriginSocketEventMap,
   OriginSocketEventListenerFor,
+  TransactionPromise,
 } from './types/index.js'
 
 export class OriginSocket<
@@ -25,11 +26,12 @@ export class OriginSocket<
 
   private readonly originTopics: Map<Topic, number> | undefined
 
-  private readonly upstreamQueue: Array<Context<RPCRequest>> | undefined
+  private readonly upstreamQueue:
+    Array<Context<RPCRequest | RPCResponse | Gossip | Topic>> | undefined
   private readonly upstreamTopics: Set<Topic> | undefined
   private readonly upstreamTransacts = new Map<string, string>()
 
-  private readonly myTransacts = new Map<string, Promise<RPCResponse>>()
+  private readonly myTransacts = new Map<string, TransactionPromise>()
   private readonly myTopics: Set<Topic> = new Set()
 
   /**
@@ -139,12 +141,12 @@ export class OriginSocket<
         new DOMException('The operation was aborted.', 'AbortError')
 
       if (options?.signal?.aborted) {
-        reject(abortReason())
+        void reject(abortReason())
         return
       }
 
       if (!this.webSocketUrl || self.navigator.onLine !== true) {
-        resolve(false)
+        void resolve(false)
         return
       }
 
@@ -152,45 +154,40 @@ export class OriginSocket<
         this.isLeader &&
         (!this.webSocket || this.webSocket.readyState !== WebSocket.OPEN)
       ) {
-        resolve(false)
+        void resolve(false)
         return
       }
 
       const handleAbort = () => {
-        this.pendingfetchs.delete(id)
-        const pendingTarget = this.pendingfetchTargets.get(id)
+        void this.myTransacts.delete(transactionId)
         if (pendingTarget) clearTimeout(pendingTarget.timeoutId)
-        this.pendingfetchTargets.delete(id)
-        signal?.removeEventListener('abort', handleAbort)
-
-        if (!this.isLeader) {
-          this.broadcastChannel?.postMessage({ kind: 'fetch-abort', id })
-        }
+        options?.signal?.removeEventListener('abort', handleAbort)
 
         reject(abortReason())
       }
 
-      this.pendingfetchs.set(id, {
+      this.myTransacts.set(transactionId, {
         resolve,
         reject,
         cleanup: () => {
-          signal?.removeEventListener('abort', handleAbort)
+          options?.signal?.removeEventListener('abort', handleAbort)
         },
       })
-      signal?.addEventListener('abort', handleAbort, { once: true })
+      options?.signal?.addEventListener('abort', handleAbort, { once: true })
 
-      if (this.isLeader) {
-        this.sendUpstream(['station-client-RPCRequest', id, message])
-        return
+      const ctx: Context<RPCRequest> = {
+        kind: 'transact',
+        id: transactionId,
+        from: 'client',
+        phase: 'request',
+        payload,
       }
 
-      this.broadcastChannel?.postMessage({
-        kind: 'fetch',
-        id,
-        source: this.instanceId,
-        ttlMs,
-        message,
-      })
+      if (this.isLeader) {
+        return void this.sendUpstream(ctx)
+      }
+
+      return void this.broadcastChannel?.postMessage(ctx)
     })
   }
 
@@ -268,14 +265,14 @@ export class OriginSocket<
   private flushUpstreamQueue() {
     if (!this.webSocket || this.webSocket.readyState !== WebSocket.OPEN) return
 
-    while (this.upstreamQueue.length > 0) {
-      const message = this.upstreamQueue.shift()
+    while (this.upstreamQueue!.length > 0) {
+      const message = this.upstreamQueue!.shift()
       if (!message) continue
 
       try {
         this.webSocket.send(encode(message))
       } catch {
-        this.upstreamQueue.unshift(message)
+        this.upstreamQueue!.unshift(message)
         return
       }
     }
@@ -325,7 +322,7 @@ export class OriginSocket<
                 typeof message[1] === 'string'
               ) {
                 const id = message[1]
-                const pendingTarget = this.pendingfetchTargets.get(id)
+                const pendingTarget = this.upstreamQueue!.get(id)
                 if (pendingTarget) {
                   clearTimeout(pendingTarget.timeoutId)
                   this.pendingfetchTargets.delete(id)
@@ -407,12 +404,12 @@ export class OriginSocket<
     this.broadcastChannel = null
     this.webSocket = null
     this.isLeader = false
-    this.upstreamQueue.length = 0
-    for (const pending of this.pendingfetchs.values()) {
+    this.upstreamQueue!.length = 0
+    for (const pending of this.upstreamQueue!.values()) {
       pending.cleanup()
       pending.reject(new Error('Station client closed'))
     }
-    this.pendingfetchs.clear()
+    this.upstreamQueue!.clear()
     for (const pendingTarget of this.pendingfetchTargets.values()) {
       clearTimeout(pendingTarget.timeoutId)
     }

@@ -58,3 +58,9 @@ export type OriginSocketEventListenerFor<
 > = K extends keyof OriginSocketEventMap<T>
   ? OriginSocketEventListener<T, K>
   : EventListenerOrEventListenerObject
+
+export type TransactionPromise = {
+  resolve: () => void
+  reject: () => void
+  cleanup: () => void
+}
