@@ -18,7 +18,9 @@ export class OriginSocket<
   private readonly onlineHandler = async () => {
     void this.upstreamConnect()
   }
-  private broadcastChannel: BroadcastChannel | null = null
+  private broadcastChannel: BroadcastChannel = new BroadcastChannel(
+    '@sovereignbase/origin-socket:channel'
+  )
   private webSocket: WebSocket | null = null
   private isLeader: boolean = false
   private isClosed: boolean = false
@@ -29,7 +31,6 @@ export class OriginSocket<
   private readonly upstreamQueue:
     Array<Context<RPCRequest | RPCResponse | Gossip | Topic>> | undefined
   private readonly upstreamTopics: Set<Topic> | undefined
-  private readonly upstreamTransacts = new Map<string, string>()
 
   private readonly myTransacts = new Map<string, TransactionPromise>()
   private readonly myTopics: Set<Topic> = new Set()
@@ -42,9 +43,6 @@ export class OriginSocket<
   constructor(webSocketUrl: string = '') {
     this.webSocketUrl = webSocketUrl
 
-    this.broadcastChannel = new BroadcastChannel(
-      '@sovereignbase/origin-socket:channel'
-    )
     this.broadcastChannel.onmessage = (
       event: MessageEvent<Context<RPCRequest | RPCResponse | Gossip>>
     ) => {
@@ -58,7 +56,12 @@ export class OriginSocket<
       }
 
       if (ctx.kind === 'gossip') {
-        if (ctx.from === 'client' && this.isLeader) void this.sendUpstream(ctx)
+        if (
+          ctx.from === 'client' &&
+          this.isLeader &&
+          this.upstreamTopics!.has(ctx.topic as Topic)
+        )
+          void this.sendUpstream(ctx)
 
         if (!this.myTopics.has(ctx.topic as Topic)) return
 
@@ -102,7 +105,7 @@ export class OriginSocket<
     if (this.isLeader)
       return void this.sendUpstream({ kind: 'invoke', payload })
 
-    return void this.broadcastChannel?.postMessage({ kind: 'invoke', payload })
+    return void this.broadcastChannel.postMessage({ kind: 'invoke', payload })
   }
 
   gossip(topic: Topic, payload: Gossip): void {
@@ -117,7 +120,7 @@ export class OriginSocket<
 
     if (this.isLeader) void this.sendUpstream(ctx)
 
-    return void this.broadcastChannel?.postMessage(ctx)
+    return void this.broadcastChannel.postMessage(ctx)
   }
 
   /**
@@ -129,7 +132,7 @@ export class OriginSocket<
    */
   transact(
     payload: RPCRequest,
-    options?: TransactOptions
+    signal?: AbortSignal
   ): Promise<RPCResponse | false> {
     if (this.isClosed) return Promise.resolve(false)
 
@@ -137,10 +140,10 @@ export class OriginSocket<
 
     return new Promise<RPCResponse | false>((resolve, reject) => {
       const abortReason = () =>
-        options?.signal?.reason ??
+        signal?.reason ??
         new DOMException('The operation was aborted.', 'AbortError')
 
-      if (options?.signal?.aborted) {
+      if (signal?.aborted) {
         void reject(abortReason())
         return
       }
@@ -160,8 +163,7 @@ export class OriginSocket<
 
       const handleAbort = () => {
         void this.myTransacts.delete(transactionId)
-        if (pendingTarget) clearTimeout(pendingTarget.timeoutId)
-        options?.signal?.removeEventListener('abort', handleAbort)
+        signal?.removeEventListener('abort', handleAbort)
 
         reject(abortReason())
       }
@@ -170,10 +172,10 @@ export class OriginSocket<
         resolve,
         reject,
         cleanup: () => {
-          options?.signal?.removeEventListener('abort', handleAbort)
+          signal?.removeEventListener('abort', handleAbort)
         },
       })
-      options?.signal?.addEventListener('abort', handleAbort, { once: true })
+      signal?.addEventListener('abort', handleAbort, { once: true })
 
       const ctx: Context<RPCRequest> = {
         kind: 'transact',
@@ -313,46 +315,32 @@ export class OriginSocket<
             }
 
             socket.onmessage = (event: MessageEvent<ArrayBuffer>) => {
-              const message = decode(event.data)
-              if (!message) return
+              const ctx = decode(event.data) as Context<unknown>
+              if (!ctx) return
 
-              if (
-                Array.isArray(message) &&
-                message[0] === 'station-client-response' &&
-                typeof message[1] === 'string'
-              ) {
-                const id = message[1]
-                const pendingTarget = this.upstreamQueue!.get(id)
-                if (pendingTarget) {
-                  clearTimeout(pendingTarget.timeoutId)
-                  this.pendingfetchTargets.delete(id)
+              if (ctx?.kind === 'transact') {
+                const transaction = this.myTransacts.get(ctx.id)
 
-                  this.broadcastChannel?.postMessage({
-                    kind: 'fetch-response',
-                    id,
-                    target: pendingTarget.target,
-                    message: message[2] as T,
-                  })
+                if (transaction) {
+                  void this.myTransacts.delete(ctx.id)
+                  void transaction.cleanup()
+                  void transaction.resolve(ctx.payload as RPCResponse)
                   return
                 }
-
-                const pending = this.pendingfetchs.get(id)
-                if (!pending) return
-
-                this.pendingfetchs.delete(id)
-                pending.cleanup()
-                pending.resolve(message[2] as T)
-                return
+                return void this.broadcastChannel.postMessage(
+                  ctx as Context<RPCResponse>
+                )
               }
 
-              this.eventTarget.dispatchEvent(
-                new CustomEvent('message', { detail: message })
-              )
+              if (ctx?.kind === 'gossip') {
+              }
 
-              this.broadcastChannel?.postMessage({
-                kind: 'post',
-                message: message as T,
-              })
+              if (ctx?.kind === 'subscribe') {
+                if (ctx?.from === 'server') {
+                  return void this.upstreamTopics!.add(ctx.topic as Topic)
+                }
+                return
+              }
             }
 
             socket.onclose = () => {

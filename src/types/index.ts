@@ -27,11 +27,6 @@ export type Context<T> =
       from: 'server' | 'client'
     }
 
-export type TransactOptions = {
-  signal: AbortSignal
-  ttlMs: number
-}
-
 /**
  * Maps OriginSocket event names to their event payload shapes.
  */
@@ -59,8 +54,8 @@ export type OriginSocketEventListenerFor<
   ? OriginSocketEventListener<T, K>
   : EventListenerOrEventListenerObject
 
-export type TransactionPromise = {
-  resolve: () => void
+export type TransactionPromise<T> = {
+  resolve: (value: T) => void
   reject: () => void
   cleanup: () => void
 }
