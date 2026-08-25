@@ -1,5 +1,10 @@
 import { encode, decode } from '@msgpack/msgpack'
-import { Context, TransactOptions } from './types/index.js'
+import {
+  Context,
+  TransactOptions,
+  OriginSocketEventMap,
+  OriginSocketEventListenerFor,
+} from './types/index.js'
 
 export class OriginSocket<
   Topic extends string,
@@ -17,7 +22,8 @@ export class OriginSocket<
   private isLeader: boolean = false
   private isClosed: boolean = false
   private isConnecting: boolean = false
-  private readonly originTopics: Set<Topic> = new Set()
+
+  private readonly originTopics: Map<Topic, number> | undefined
 
   private readonly upstreamQueue: Array<Context<RPCRequest>> | undefined
   private readonly upstreamTopics: Set<Topic> | undefined
@@ -100,7 +106,7 @@ export class OriginSocket<
   gossip(topic: Topic, payload: Gossip): void {
     if (this.isClosed) return
 
-    const ctx: Co<xGossip> = {
+    const ctx: Context<Gossip> = {
       kind: 'gossip',
       from: 'client',
       topic,
@@ -126,14 +132,13 @@ export class OriginSocket<
     if (this.isClosed) return Promise.resolve(false)
 
     const transactionId = crypto.randomUUID()
-    const { signal, ttlMs } = options
 
     return new Promise<RPCResponse | false>((resolve, reject) => {
       const abortReason = () =>
-        signal?.reason ??
+        options?.signal?.reason ??
         new DOMException('The operation was aborted.', 'AbortError')
 
-      if (signal?.aborted) {
+      if (options?.signal?.aborted) {
         reject(abortReason())
         return
       }
@@ -200,7 +205,14 @@ export class OriginSocket<
       from: 'client',
     }
 
-    if (this.isLeader) void this.sendUpstream(ctx)
+    if (this.isLeader) {
+      const topicSubscibers = this.originTopics!.get(topic)
+      void this.originTopics!.set(
+        topic,
+        topicSubscibers ? topicSubscibers + 1 : 1
+      )
+      void this.sendUpstream(ctx)
+    }
 
     return void this.broadcastChannel?.postMessage(ctx)
   }
@@ -217,7 +229,17 @@ export class OriginSocket<
     }
 
     if (this.isLeader) {
-      void this.sendUpstream(ctx)
+      let topicSubscibers = this.originTopics!.get(topic)
+      if (topicSubscibers) {
+        topicSubscibers -= 1
+
+        if (topicSubscibers == 0) {
+          this.originTopics!.delete(topic)
+          return void this.sendUpstream(ctx)
+        } else {
+          return void this.originTopics!.set(topic, topicSubscibers)
+        }
+      }
     }
 
     return void this.broadcastChannel?.postMessage(ctx)
@@ -225,7 +247,7 @@ export class OriginSocket<
 
   //HELPER
   private sendUpstream(
-    context: Context<RPCRequest | RPCResponse | Gossip | Topic>
+    ctx: Context<RPCRequest | RPCResponse | Gossip | Topic>
   ) {
     if (!this.isLeader || !this.webSocketUrl) return
 
@@ -233,13 +255,13 @@ export class OriginSocket<
       if (self.navigator.onLine) {
         // Limit outbound queue to 64 entries
         if (this.upstreamQueue!.length >= 64) this.upstreamQueue!.shift()
-        this.upstreamQueue!.push(context)
+        this.upstreamQueue!.push(ctx)
       }
       return
     }
 
     try {
-      this.webSocket.send(encode(context))
+      this.webSocket.send(encode(ctx))
     } catch {}
   }
 

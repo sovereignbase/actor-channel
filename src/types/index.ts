@@ -31,3 +31,30 @@ export type TransactOptions = {
   signal: AbortSignal
   ttlMs: number
 }
+
+/**
+ * Maps OriginSocket event names to their event payload shapes.
+ */
+export type OriginSocketEventMap<Gossip> = {
+  gossip: Gossip
+}
+
+/**
+ * Represents a strongly typed OriginSocket event listener.
+ */
+export type OriginSocketEventListener<
+  T,
+  K extends keyof OriginSocketEventMap<T>,
+> =
+  | ((event: CustomEvent<OriginSocketEventMap<T>[K]>) => void)
+  | { handleEvent(event: CustomEvent<OriginSocketEventMap<T>[K]>): void }
+
+/**
+ * Resolves an event name to its corresponding listener type.
+ */
+export type OriginSocketEventListenerFor<
+  T,
+  K extends string,
+> = K extends keyof OriginSocketEventMap<T>
+  ? OriginSocketEventListener<T, K>
+  : EventListenerOrEventListenerObject
