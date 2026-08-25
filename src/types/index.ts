@@ -4,6 +4,11 @@ export type Context<T> =
       payload: T
     }
   | {
+      kind: 'signal'
+      from: 'server' | 'client'
+      payload: T
+    }
+  | {
       kind: 'gossip'
       topic: string
       payload: T
@@ -14,7 +19,6 @@ export type Context<T> =
       id: string
       payload: T
       phase: 'request' | 'response'
-      from: 'server' | 'client'
     }
   | {
       kind: 'subscribe'

@@ -9,6 +9,7 @@ import {
 export class OriginSocket<
   Topic extends string,
   Gossip,
+  Signal,
   RPCRequest,
   RPCResponse,
 > {
@@ -46,14 +47,14 @@ export class OriginSocket<
     this.webSocketUrl = webSocketUrl
 
     this.broadcastChannel.onmessage = (
-      event: MessageEvent<Context<RPCRequest | RPCResponse | Gossip>>
+      event: MessageEvent<Context<RPCRequest | RPCResponse | Gossip | Signal>>
     ) => {
       const ctx = event.data
       if (!ctx) return
 
       if (ctx.kind === 'invoke') {
         if (!this.isLeader) return
-        void this.sendUpstream(ctx)
+        void this.sendUpstream(ctx as Context<RPCRequest>)
         return
       }
 
@@ -63,7 +64,7 @@ export class OriginSocket<
           this.isLeader &&
           this.upstreamTopics!.has(ctx.topic as Topic)
         )
-          void this.sendUpstream(ctx)
+          void this.sendUpstream(ctx as Context<Gossip>)
 
         if (!this.myTopics.has(ctx.topic as Topic)) return
 
@@ -75,7 +76,7 @@ export class OriginSocket<
       if (ctx.kind === 'transact') {
         if (ctx.phase === 'request') {
           if (!this.isLeader) return
-          else void this.sendUpstream(ctx)
+          else void this.sendUpstream(ctx as Context<RPCRequest>)
         }
         if (ctx.phase === 'response') {
           const transaction = this.myTransacts.get(ctx.id)
@@ -182,7 +183,6 @@ export class OriginSocket<
       const ctx: Context<RPCRequest> = {
         kind: 'transact',
         id: transactionId,
-        from: 'client',
         phase: 'request',
         payload,
       }
@@ -248,7 +248,7 @@ export class OriginSocket<
 
   //HELPER
   private sendUpstream(
-    ctx: Context<RPCRequest | RPCResponse | Gossip | Topic>
+    ctx: Context<Topic | Gossip | RPCRequest | RPCResponse>
   ) {
     if (!this.isLeader || !this.webSocketUrl) return
 
@@ -394,9 +394,9 @@ export class OriginSocket<
    * @param listener The callback that receives the event.
    * @param options An options object that specifies characteristics about the event listener.
    */
-  addEventListener<K extends keyof OriginSocketEventMap<Gossip>>(
+  addEventListener<K extends keyof OriginSocketEventMap<Gossip | Signal>>(
     type: K,
-    listener: OriginSocketEventListenerFor<Gossip, K> | null,
+    listener: OriginSocketEventListenerFor<Gossip | Signal, K> | null,
     options?: boolean | AddEventListenerOptions
   ): void {
     void this.eventTarget.addEventListener(
@@ -413,9 +413,9 @@ export class OriginSocket<
    * @param listener The callback to remove.
    * @param options An options object that specifies characteristics about the event listener.
    */
-  removeEventListener<K extends keyof OriginSocketEventMap<Gossip>>(
+  removeEventListener<K extends keyof OriginSocketEventMap<Gossip | Signal>>(
     type: K,
-    listener: OriginSocketEventListenerFor<Gossip, K> | null,
+    listener: OriginSocketEventListenerFor<Gossip | Signal, K> | null,
     options?: boolean | EventListenerOptions
   ): void {
     void this.eventTarget.removeEventListener(
@@ -429,12 +429,17 @@ export class OriginSocket<
 export function serverHandle<
   Topic extends string,
   Gossip,
+  Signal,
   RPCRequest,
   RPCResponse,
->(buffer: ArrayBuffer): Context<Topic | Gossip | RPCRequest | RPCResponse> {
+>(
+  buffer: ArrayBuffer
+): Context<Topic | Gossip | Signal | RPCRequest | RPCResponse> | false {
   const ctx = decode(buffer) as Context<
     Topic | Gossip | RPCRequest | RPCResponse
   >
+
+  if (!ctx) return false
   return ctx
 }
 
