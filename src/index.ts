@@ -100,16 +100,16 @@ export class OriginSocket<
   gossip(topic: Topic, payload: Gossip): void {
     if (this.isClosed) return
 
-    const context: Context<Gossip> = {
+    const ctx: Co<xGossip> = {
       kind: 'gossip',
       from: 'client',
       topic,
       payload,
     }
 
-    if (this.isLeader) void this.sendUpstream(context)
+    if (this.isLeader) void this.sendUpstream(ctx)
 
-    return void this.broadcastChannel?.postMessage(context)
+    return void this.broadcastChannel?.postMessage(ctx)
   }
 
   /**
@@ -194,15 +194,15 @@ export class OriginSocket<
 
     void this.myTopics.add(topic)
 
-    const context: Context<Topic> = {
+    const ctx: Context<Topic> = {
       kind: 'subscribe',
       topic,
       from: 'client',
     }
 
-    if (this.isLeader) void this.sendUpstream(context)
+    if (this.isLeader) void this.sendUpstream(ctx)
 
-    return void this.broadcastChannel?.postMessage(context)
+    return void this.broadcastChannel?.postMessage(ctx)
   }
 
   unsubscribe(topic: Topic): void {
@@ -210,17 +210,17 @@ export class OriginSocket<
 
     void this.myTopics.delete(topic)
 
-    const context: Context<Topic> = {
+    const ctx: Context<Topic> = {
       kind: 'unsubscribe',
       topic,
       from: 'client',
     }
 
     if (this.isLeader) {
-      void this.sendUpstream(context)
+      void this.sendUpstream(ctx)
     }
 
-    return void this.broadcastChannel?.postMessage(context)
+    return void this.broadcastChannel?.postMessage(ctx)
   }
 
   //HELPER
