@@ -2,19 +2,19 @@
  * A message exchanged between OriginSocket clients and an upstream server.
  *
  * The `kind` discriminator determines which routing fields are present. The
- * generic payload type is intentionally not validated by `decodeContext`.
+ * generic detail type is intentionally not validated by `decodeContext`.
  *
- * @typeParam T - Payload type carried by the context.
+ * @typeParam T - Detail type carried by the context.
  */
 export type Context<T> =
   | {
       kind: 'invoke'
-      payload: T
+      detail: T
     }
   | {
       kind: 'offer'
       id: string
-      payload: T
+      detail: T
     }
   | {
       kind: 'withdraw'
@@ -23,18 +23,18 @@ export type Context<T> =
   | {
       kind: 'answer'
       id: string
-      payload: T
+      detail: T
     }
   | {
       kind: 'gossip'
       topic: string
-      payload: T
+      detail: T
       from: 'server' | 'client'
     }
   | {
-      kind: 'transact'
+      kind: 'request'
       id: string
-      payload: T
+      detail: T
       phase: 'request' | 'response'
     }
   | {
@@ -52,13 +52,13 @@ export type Context<T> =
  * Maps OriginSocket event names to their event detail values.
  *
  * `online` and `offline` describe the shared upstream connection. `gossip` and
- * `answer` carry their respective payloads in `CustomEvent.detail`.
+ * `answer` carry their respective details in `CustomEvent.detail`.
  *
  * @typeParam Gossip - Detail emitted by `gossip` events.
  * @typeParam Answer - Detail emitted by `answer` events.
  */
 export type OriginSocketEventMap<Gossip, Answer> = {
-  /** A payload received for a locally subscribed topic. */
+  /** A detail received for a locally subscribed topic. */
   gossip: Gossip
   /** A response to an offer created by this instance. */
   answer: Answer
@@ -103,14 +103,14 @@ export type OriginSocketEventListenerFor<
   : EventListenerOrEventListenerObject
 
 /**
- * Internal callbacks retained for a pending transaction.
+ * Internal callbacks retained for a pending request.
  *
- * @typeParam T - Successful transaction response type.
+ * @typeParam T - Successful request response type.
  */
-export type TransactionPromise<T> = {
-  /** Resolves the transaction with its response. */
+export type RequestPromise<T> = {
+  /** Resolves the request with its response. */
   resolve: (value: T) => void
-  /** Rejects the transaction. */
+  /** Rejects the request. */
   reject: (reason?: unknown) => void
   /** Removes resources such as abort listeners. */
   cleanup: () => void

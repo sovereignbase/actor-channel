@@ -156,7 +156,7 @@ test('routes offer answers and cleanup in a browser', async ({ page }) => {
   const answer = encode({
     kind: 'answer',
     id: offer.id,
-    payload: { candidate: 'candidate-1' },
+    detail: { candidate: 'candidate-1' },
   })
 
   await page.evaluate(
@@ -186,7 +186,7 @@ test('routes offer answers and cleanup in a browser', async ({ page }) => {
   })
 })
 
-test('rejects a transaction without replay after browser leader failover', async ({
+test('rejects a request without replay after browser leader failover', async ({
   page,
 }) => {
   await page.evaluate(async (moduleUrl) => {
@@ -203,7 +203,7 @@ test('rejects a transaction without replay after browser leader failover', async
 
   await page.evaluate(() => {
     void (window as any).follower
-      .transact({ method: 'write' })
+      .request({ method: 'write' })
       .catch((error: DOMException) => {
         ;(window as any).rejection = error.name
       })

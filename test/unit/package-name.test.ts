@@ -148,7 +148,7 @@ afterEach(() => {
 })
 
 describe('OriginSocket client routing', () => {
-  it('forwards invoke and resolves a follower transaction response', async () => {
+  it('forwards invoke and resolves a follower request response', async () => {
     const leader = createClient()
     const follower = createClient()
     const socket = FakeWebSocket.instances[0]!
@@ -159,18 +159,18 @@ describe('OriginSocket client routing', () => {
     await vi.waitFor(() => expect(socket.sent).toHaveLength(1))
     expect(sentContexts(socket)[0]).toEqual({
       kind: 'invoke',
-      payload: { method: 'refresh' },
+      detail: { method: 'refresh' },
     })
 
-    const response = follower.transact({ method: 'read' })
+    const response = follower.request({ method: 'read' })
     await vi.waitFor(() => expect(socket.sent).toHaveLength(2))
     const request = sentContexts(socket)[1]!
 
     socket.receive({
-      kind: 'transact',
+      kind: 'request',
       phase: 'response',
       id: request.id,
-      payload: { result: 'done' },
+      detail: { result: 'done' },
     })
 
     await expect(response).resolves.toEqual({ result: 'done' })
@@ -198,7 +198,7 @@ describe('OriginSocket client routing', () => {
     socket.receive({
       kind: 'answer',
       id: offer.id,
-      payload: { candidate: 'candidate-1' },
+      detail: { candidate: 'candidate-1' },
     })
     await vi.waitFor(() =>
       expect(followerAnswers).toEqual([{ candidate: 'candidate-1' }])
@@ -216,7 +216,7 @@ describe('OriginSocket client routing', () => {
     socket.receive({
       kind: 'answer',
       id: offer.id,
-      payload: { candidate: 'late' },
+      detail: { candidate: 'late' },
     })
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(followerAnswers).toHaveLength(1)
@@ -245,7 +245,7 @@ describe('OriginSocket client routing', () => {
       kind: 'gossip',
       from: 'server',
       topic: 'news',
-      payload: { message: 'hello' },
+      detail: { message: 'hello' },
     })
     await vi.waitFor(() => {
       expect(leaderGossip).toEqual([{ message: 'hello' }])
@@ -300,13 +300,13 @@ describe('OriginSocket client routing', () => {
     ).toEqual(['unsubscribe', 'withdraw'])
   })
 
-  it('rejects a transaction without replaying it after failover', async () => {
+  it('rejects a request without replaying it after failover', async () => {
     const leader = createClient()
     const follower = createClient()
     const firstSocket = FakeWebSocket.instances[0]!
     await waitUntilOnline(follower)
 
-    const response = follower.transact({ method: 'write' })
+    const response = follower.request({ method: 'write' })
     await vi.waitFor(() => expect(firstSocket.sent).toHaveLength(1))
 
     leader.close()
@@ -365,7 +365,7 @@ describe('OriginSocket client routing', () => {
     expect(offline.gossip('news', { message: 'hello' })).toBe(false)
     expect(offline.subscribe('news')).toBe(false)
     expect(offline.unsubscribe('news')).toBe(false)
-    await expect(offline.transact({ method: 'write' })).resolves.toBe(false)
+    await expect(offline.request({ method: 'write' })).resolves.toBe(false)
 
     const listener = vi.fn()
     offline.addEventListener('online', listener)
@@ -381,7 +381,7 @@ describe('OriginSocket client routing', () => {
     expect(offline.gossip('news', { message: 'closed' })).toBe(false)
     expect(offline.subscribe('news')).toBe(false)
     expect(offline.unsubscribe('news')).toBe(false)
-    await expect(offline.transact({ method: 'closed' })).resolves.toBe(false)
+    await expect(offline.request({ method: 'closed' })).resolves.toBe(false)
 
     const leader = createClient()
     const follower = createClient()
@@ -392,7 +392,7 @@ describe('OriginSocket client routing', () => {
     const abortReason = new Error('already aborted')
     alreadyAborted.abort(abortReason)
     await expect(
-      follower.transact({ method: 'abort' }, alreadyAborted.signal)
+      follower.request({ method: 'abort' }, alreadyAborted.signal)
     ).rejects.toBe(abortReason)
 
     const fallbackSignal = {
@@ -402,11 +402,11 @@ describe('OriginSocket client routing', () => {
       removeEventListener: vi.fn(),
     } as unknown as AbortSignal
     await expect(
-      follower.transact({ method: 'abort' }, fallbackSignal)
+      follower.request({ method: 'abort' }, fallbackSignal)
     ).rejects.toMatchObject({ name: 'AbortError' })
 
     const controller = new AbortController()
-    const pending = follower.transact({ method: 'abort' }, controller.signal)
+    const pending = follower.request({ method: 'abort' }, controller.signal)
     await vi.waitFor(() => expect(socket.sent).toHaveLength(1))
     controller.abort()
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
@@ -425,7 +425,7 @@ describe('OriginSocket client routing', () => {
       originTopics: Map<string, number>
       myTopics: Set<string>
       myOffers: Set<string>
-      myTransacts: Map<
+      myRequests: Map<
         string,
         {
           resolve: (value: unknown) => void
@@ -452,7 +452,7 @@ describe('OriginSocket client routing', () => {
     const cleanup = vi.fn()
     state.isOnline = true
     state.connectionId = 'active'
-    state.myTransacts.set('pending', {
+    state.myRequests.set('pending', {
       resolve: vi.fn(),
       reject,
       cleanup,
@@ -461,29 +461,29 @@ describe('OriginSocket client routing', () => {
     expect(reject).toHaveBeenCalledOnce()
     expect(cleanup).toHaveBeenCalledOnce()
 
-    channelMessage(client, { kind: 'invoke', payload: { method: 'ignored' } })
+    channelMessage(client, { kind: 'invoke', detail: { method: 'ignored' } })
     channelMessage(client, {
       kind: 'offer',
       id: 'ignored',
-      payload: { roomId: 'ignored' },
+      detail: { roomId: 'ignored' },
     })
     channelMessage(client, { kind: 'withdraw', id: 'ignored' })
     channelMessage(client, {
-      kind: 'transact',
+      kind: 'request',
       id: 'ignored',
       phase: 'request',
-      payload: { method: 'ignored' },
+      detail: { method: 'ignored' },
     })
 
     state.isLeader = true
     state.isOnline = true
     state.connectionId = 'leader'
     channelMessage(client, { kind: 'status' })
-    channelMessage(client, { kind: 'invoke', payload: { method: 'invoke' } })
+    channelMessage(client, { kind: 'invoke', detail: { method: 'invoke' } })
     channelMessage(client, {
       kind: 'offer',
       id: 'offer',
-      payload: { roomId: 'room' },
+      detail: { roomId: 'room' },
     })
     channelMessage(client, { kind: 'withdraw', id: 'offer' })
 
@@ -494,20 +494,20 @@ describe('OriginSocket client routing', () => {
     channelMessage(client, {
       kind: 'answer',
       id: 'missing',
-      payload: { candidate: 'missing' },
+      detail: { candidate: 'missing' },
     })
     state.myOffers.add('owned')
     channelMessage(client, {
       kind: 'answer',
       id: 'owned',
-      payload: { candidate: 'owned' },
+      detail: { candidate: 'owned' },
     })
 
     channelMessage(client, {
       kind: 'gossip',
       from: 'client',
       topic: 'ignored',
-      payload: { message: 'ignored' },
+      detail: { message: 'ignored' },
     })
     state.upstreamTopics.set('news', 1)
     state.myTopics.add('news')
@@ -515,34 +515,34 @@ describe('OriginSocket client routing', () => {
       kind: 'gossip',
       from: 'client',
       topic: 'news',
-      payload: { message: 'client' },
+      detail: { message: 'client' },
     })
     channelMessage(client, {
       kind: 'gossip',
       from: 'server',
       topic: 'news',
-      payload: { message: 'server' },
+      detail: { message: 'server' },
     })
 
     channelMessage(client, {
-      kind: 'transact',
+      kind: 'request',
       id: 'request',
       phase: 'request',
-      payload: { method: 'request' },
+      detail: { method: 'request' },
     })
     channelMessage(client, {
-      kind: 'transact',
+      kind: 'request',
       id: 'missing',
       phase: 'response',
-      payload: { result: 'missing' },
+      detail: { result: 'missing' },
     })
     const resolve = vi.fn()
-    state.myTransacts.set('owned', { resolve, reject: vi.fn(), cleanup })
+    state.myRequests.set('owned', { resolve, reject: vi.fn(), cleanup })
     channelMessage(client, {
-      kind: 'transact',
+      kind: 'request',
       id: 'owned',
       phase: 'response',
-      payload: { result: 'owned' },
+      detail: { result: 'owned' },
     })
 
     channelMessage(client, { kind: 'subscribe', from: 'server', topic: 'up' })
@@ -573,7 +573,7 @@ describe('OriginSocket client routing', () => {
   it('handles transport queues and WebSocket send failures', async () => {
     const client = createOfflineClient()
     const state = client as any
-    const context = { kind: 'invoke', payload: { method: 'write' } }
+    const context = { kind: 'invoke', detail: { method: 'write' } }
 
     expect(state.sendUpstream(context)).toBe(false)
     state.isLeader = true
@@ -623,46 +623,44 @@ describe('OriginSocket client routing', () => {
     socket.receive({
       kind: 'answer',
       id: offer.id,
-      payload: { candidate: 'answer' },
+      detail: { candidate: 'answer' },
     })
     withdraw()
 
-    const response = leader.transact({ method: 'read' })
-    const transaction = sentContexts(socket).find(
-      ({ kind }) => kind === 'transact'
-    )!
+    const response = leader.request({ method: 'read' })
+    const request = sentContexts(socket).find(({ kind }) => kind === 'request')!
     socket.receive({
-      kind: 'transact',
+      kind: 'request',
       phase: 'response',
-      id: transaction.id,
-      payload: { result: 'done' },
+      id: request.id,
+      detail: { result: 'done' },
     })
     await expect(response).resolves.toEqual({ result: 'done' })
 
     socket.throwOnSend = true
-    await expect(leader.transact({ method: 'failed' })).resolves.toBe(false)
+    await expect(leader.request({ method: 'failed' })).resolves.toBe(false)
     socket.throwOnSend = false
 
     expect(leader.subscribe('direct')).toBe(true)
     expect(leader.unsubscribe('direct')).toBe(true)
     socket.receive(1)
     socket.receive({
-      kind: 'transact',
+      kind: 'request',
       phase: 'request',
       id: 'request',
-      payload: { method: 'ignored' },
+      detail: { method: 'ignored' },
     })
     socket.receive({
       kind: 'gossip',
       from: 'client',
       topic: 'ignored',
-      payload: { message: 'ignored' },
+      detail: { message: 'ignored' },
     })
     socket.receive({
       kind: 'gossip',
       from: 'server',
       topic: 'unsubscribed',
-      payload: { message: 'ignored' },
+      detail: { message: 'ignored' },
     })
     socket.receive({ kind: 'subscribe', from: 'client', topic: 'ignored' })
     socket.receive({ kind: 'unsubscribe', from: 'client', topic: 'ignored' })
@@ -671,20 +669,20 @@ describe('OriginSocket client routing', () => {
     expect(answers).toEqual([{ candidate: 'answer' }])
   })
 
-  it('rejects a leader transaction when its socket closes', async () => {
+  it('rejects a leader request when its socket closes', async () => {
     const leader = createClient()
     const socket = FakeWebSocket.instances[0]!
     await waitUntilOnline(leader)
-    const response = leader.transact({ method: 'pending' })
+    const response = leader.request({ method: 'pending' })
     socket.close()
     await expect(response).rejects.toMatchObject({ name: 'NetworkError' })
   })
 
-  it('rejects follower transactions when that instance closes', async () => {
+  it('rejects follower requests when that instance closes', async () => {
     createClient()
     const follower = createClient()
     await waitUntilOnline(follower)
-    const response = follower.transact({ method: 'pending' })
+    const response = follower.request({ method: 'pending' })
     follower.close()
     await expect(response).rejects.toBeUndefined()
   })

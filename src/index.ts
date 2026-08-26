@@ -3,7 +3,7 @@ import {
   Context,
   OriginSocketEventMap,
   OriginSocketEventListenerFor,
-  TransactionPromise,
+  RequestPromise,
 } from './types/index.js'
 
 type ChannelMessage<T> =
@@ -22,12 +22,12 @@ type ChannelMessage<T> =
  *
  * @typeParam Topic - Topic names accepted by {@link subscribe},
  *   {@link unsubscribe}, and {@link gossip}.
- * @typeParam Gossip - Payload sent and received through gossip events.
- * @typeParam Offer - Payload sent by {@link offer}.
- * @typeParam Answer - Payload received by answer events.
- * @typeParam RPCRequest - Payload accepted by {@link invoke} and
- *   {@link transact}.
- * @typeParam RPCResponse - Payload resolved by {@link transact}.
+ * @typeParam Gossip - Detail sent and received through gossip events.
+ * @typeParam Offer - Detail sent by {@link offer}.
+ * @typeParam Answer - Detail received by answer events.
+ * @typeParam RPCRequest - Detail accepted by {@link invoke} and
+ *   {@link request}.
+ * @typeParam RPCResponse - Detail resolved by {@link request}.
  */
 export class OriginSocket<
   Topic extends string,
@@ -61,9 +61,8 @@ export class OriginSocket<
   // Replicated topics ordered by upstream.
   private upstreamTopics: Map<Topic, number> | null = null
 
-  // Pending transaction promises of this instance
-  private myTransacts: Map<string, TransactionPromise<RPCResponse>> | null =
-    null
+  // Pending request promises of this instance
+  private myRequests: Map<string, RequestPromise<RPCResponse>> | null = null
   private myOffers: Set<string> | null = null
   // Topics subscribed by  this instance
   private myTopics: Set<Topic> | null = null
@@ -81,7 +80,7 @@ export class OriginSocket<
       '@sovereignbase/origin-socket:broadcast-channel'
     )
     this.myTopics = new Set()
-    this.myTransacts = new Map()
+    this.myRequests = new Map()
     this.myOffers = new Set()
     this.originTopics = new Map()
     this.upstreamQueue = []
@@ -122,11 +121,11 @@ export class OriginSocket<
           'The upstream connection was lost.',
           'NetworkError'
         )
-        for (const transaction of this.myTransacts!.values()) {
-          void transaction.cleanup()
-          void transaction.reject(reason)
+        for (const request of this.myRequests!.values()) {
+          void request.cleanup()
+          void request.reject(reason)
         }
-        void this.myTransacts!.clear()
+        void this.myRequests!.clear()
         void this.eventTarget.dispatchEvent(new CustomEvent('offline'))
         return
       }
@@ -146,7 +145,7 @@ export class OriginSocket<
         if (!this.myOffers!.has(ctx.id)) return
 
         return void this.eventTarget.dispatchEvent(
-          new CustomEvent('answer', { detail: ctx.payload as Answer })
+          new CustomEvent('answer', { detail: ctx.detail as Answer })
         )
       }
 
@@ -161,22 +160,22 @@ export class OriginSocket<
         if (!this.myTopics!.has(ctx.topic as Topic)) return
 
         return void this.eventTarget.dispatchEvent(
-          new CustomEvent('gossip', { detail: ctx.payload as Gossip })
+          new CustomEvent('gossip', { detail: ctx.detail as Gossip })
         )
       }
 
-      if (ctx.kind === 'transact') {
+      if (ctx.kind === 'request') {
         if (ctx.phase === 'request') {
           if (!this.isLeader) return
           else void this.sendUpstream(ctx as Context<RPCRequest>)
         }
         if (ctx.phase === 'response') {
-          const transaction = this.myTransacts!.get(ctx.id)
-          if (!transaction) return
+          const request = this.myRequests!.get(ctx.id)
+          if (!request) return
 
-          void this.myTransacts!.delete(ctx.id)
-          void transaction.cleanup()
-          void transaction.resolve(ctx.payload as RPCResponse)
+          void this.myRequests!.delete(ctx.id)
+          void request.cleanup()
+          void request.resolve(ctx.detail as RPCResponse)
           return
         }
         return
@@ -219,16 +218,16 @@ export class OriginSocket<
   /**
    * Sends a fire-and-forget request upstream.
    *
-   * @param payload - Request payload.
+   * @param detail - Request detail.
    * @returns `true` when the operation was accepted while the shared
    *   connection was online; this is not a server acknowledgement.
    */
-  invoke(payload: RPCRequest): boolean {
+  invoke(detail: RPCRequest): boolean {
     if (this.isClosed || !this.isOnline) return false
 
-    if (this.isLeader) return this.sendUpstream({ kind: 'invoke', payload })
+    if (this.isLeader) return this.sendUpstream({ kind: 'invoke', detail })
 
-    void this.broadcastChannel!.postMessage({ kind: 'invoke', payload })
+    void this.broadcastChannel!.postMessage({ kind: 'invoke', detail })
     return true
   }
 
@@ -239,21 +238,21 @@ export class OriginSocket<
    * Offer identifiers are managed internally. Matching answers are emitted as
    * `answer` events on this instance.
    *
-   * @param payload - Offer payload.
+   * @param detail - Offer detail.
    * @returns An idempotent function that withdraws the offer.
    * @example
    * ```ts
-   * const withdraw = socket.offer(payload)
+   * const withdraw = socket.offer(detail)
    * withdraw()
    * ```
    */
-  offer(payload: Offer): () => void {
+  offer(detail: Offer): () => void {
     if (this.isClosed) return () => {}
 
     const id = crypto.randomUUID()
     void this.myOffers!.add(id)
 
-    const ctx: Context<Offer> = { kind: 'offer', id, payload }
+    const ctx: Context<Offer> = { kind: 'offer', id, detail }
 
     if (this.isLeader) void this.sendUpstream(ctx)
     else void this.broadcastChannel!.postMessage(ctx)
@@ -269,21 +268,21 @@ export class OriginSocket<
   }
 
   /**
-   * Publishes a payload to a topic.
+   * Publishes a detail to a topic.
    *
    * @param topic - Destination topic.
-   * @param payload - Gossip payload.
+   * @param detail - Gossip detail.
    * @returns `true` when the operation was accepted while the shared
    *   connection was online; this is not a server acknowledgement.
    */
-  gossip(topic: Topic, payload: Gossip): boolean {
+  gossip(topic: Topic, detail: Gossip): boolean {
     if (this.isClosed || !this.isOnline) return false
 
     const ctx: Context<Gossip> = {
       kind: 'gossip',
       from: 'client',
       topic,
-      payload,
+      detail,
     }
 
     if (this.isLeader && this.upstreamTopics!.has(topic))
@@ -296,24 +295,24 @@ export class OriginSocket<
   /**
    * Sends a request and waits for its matching response.
    *
-   * Pending transactions are not replayed. They reject with a `NetworkError`
+   * Pending requests are not replayed. They reject with a `NetworkError`
    * when the shared connection changes, even when the server may already have
    * processed the request.
    *
-   * @param payload - Request payload.
-   * @param signal - Optional signal used to abort the transaction.
-   * @returns The response payload, or `false` when the operation cannot be sent
+   * @param detail - Request detail.
+   * @param signal - Optional signal used to abort the request.
+   * @returns The response detail, or `false` when the operation cannot be sent
    *   because the instance is closed or the shared connection is offline.
    * @throws The abort reason when `signal` is aborted.
    * @throws A `DOMException` named `NetworkError` if the connection is lost.
    */
-  transact(
-    payload: RPCRequest,
+  request(
+    detail: RPCRequest,
     signal?: AbortSignal
   ): Promise<RPCResponse | false> {
     if (this.isClosed || !this.isOnline) return Promise.resolve(false)
 
-    const transactionId = crypto.randomUUID()
+    const requestId = crypto.randomUUID()
 
     return new Promise<RPCResponse | false>((resolve, reject) => {
       const abortReason = () =>
@@ -326,13 +325,13 @@ export class OriginSocket<
       }
 
       const handleAbort = () => {
-        void this.myTransacts!.delete(transactionId)
+        void this.myRequests!.delete(requestId)
         void signal?.removeEventListener('abort', handleAbort)
 
         void reject(abortReason())
       }
 
-      this.myTransacts!.set(transactionId, {
+      this.myRequests!.set(requestId, {
         resolve,
         reject,
         cleanup: () => {
@@ -342,16 +341,16 @@ export class OriginSocket<
       void signal?.addEventListener('abort', handleAbort, { once: true })
 
       const ctx: Context<RPCRequest> = {
-        kind: 'transact',
-        id: transactionId,
+        kind: 'request',
+        id: requestId,
         phase: 'request',
-        payload,
+        detail,
       }
 
       if (this.isLeader) {
         if (this.sendUpstream(ctx)) return
 
-        void this.myTransacts!.delete(transactionId)
+        void this.myRequests!.delete(requestId)
         void signal?.removeEventListener('abort', handleAbort)
         void resolve(false)
         return
@@ -484,11 +483,11 @@ export class OriginSocket<
                 'The upstream connection was lost.',
                 'NetworkError'
               )
-              for (const transaction of this.myTransacts!.values()) {
-                void transaction.cleanup()
-                void transaction.reject(reason)
+              for (const request of this.myRequests!.values()) {
+                void request.cleanup()
+                void request.reject(reason)
               }
-              void this.myTransacts!.clear()
+              void this.myRequests!.clear()
               void this.eventTarget.dispatchEvent(new CustomEvent('offline'))
             }
             void this.broadcastChannel!.postMessage({
@@ -526,15 +525,15 @@ export class OriginSocket<
               const ctx = decode(event.data) as Context<unknown>
               if (ctx === undefined || typeof ctx !== 'object') return
 
-              if (ctx?.kind === 'transact') {
+              if (ctx?.kind === 'request') {
                 if (ctx.phase !== 'response') return
 
-                const transaction = this.myTransacts!.get(ctx.id)
+                const request = this.myRequests!.get(ctx.id)
 
-                if (transaction) {
-                  void this.myTransacts!.delete(ctx.id)
-                  void transaction.cleanup()
-                  void transaction.resolve(ctx.payload as RPCResponse)
+                if (request) {
+                  void this.myRequests!.delete(ctx.id)
+                  void request.cleanup()
+                  void request.resolve(ctx.detail as RPCResponse)
                   return
                 }
                 return void this.broadcastChannel!.postMessage(
@@ -546,7 +545,7 @@ export class OriginSocket<
                 if (this.myOffers!.has(ctx.id)) {
                   return void this.eventTarget.dispatchEvent(
                     new CustomEvent('answer', {
-                      detail: ctx.payload as Answer,
+                      detail: ctx.detail as Answer,
                     })
                   )
                 }
@@ -561,7 +560,7 @@ export class OriginSocket<
 
                 return void this.eventTarget.dispatchEvent(
                   new CustomEvent('gossip', {
-                    detail: ctx.payload as Gossip,
+                    detail: ctx.detail as Gossip,
                   })
                 )
               }
@@ -607,11 +606,11 @@ export class OriginSocket<
                   'The upstream connection was lost.',
                   'NetworkError'
                 )
-                for (const transaction of this.myTransacts!.values()) {
-                  void transaction.cleanup()
-                  void transaction.reject(reason)
+                for (const request of this.myRequests!.values()) {
+                  void request.cleanup()
+                  void request.reject(reason)
                 }
-                void this.myTransacts!.clear()
+                void this.myRequests!.clear()
                 void this.eventTarget.dispatchEvent(new CustomEvent('offline'))
               }
               void this.broadcastChannel?.postMessage({
@@ -643,7 +642,7 @@ export class OriginSocket<
   /**
    * Closes the instance and releases its local and shared resources.
    *
-   * Active offers and subscriptions are withdrawn, and pending transactions
+   * Active offers and subscriptions are withdrawn, and pending requests
    * are rejected. Calling `close` more than once has no effect.
    */
   close(): void {
@@ -675,16 +674,16 @@ export class OriginSocket<
     }
 
     try {
-      for (const transaction of this.myTransacts!.values()) {
-        void transaction.cleanup()
-        void transaction.reject()
+      for (const request of this.myRequests!.values()) {
+        void request.cleanup()
+        void request.reject()
       }
       void this.myTopics!.clear()
-      void this.myTransacts!.clear()
+      void this.myRequests!.clear()
       void this.myOffers!.clear()
       void this.broadcastChannel!.close()
       this.myTopics = null
-      this.myTransacts = null
+      this.myRequests = null
       this.myOffers = null
       this.broadcastChannel = null
     } catch {}
@@ -739,15 +738,15 @@ export class OriginSocket<
 /**
  * Decodes and validates a MessagePack-encoded OriginSocket context.
  *
- * Validation covers the context discriminator and routing fields. Payloads are
+ * Validation covers the context discriminator and routing fields. Details are
  * intentionally opaque and are returned as the caller-provided generic types.
  *
  * @typeParam Topic - Topic name type.
- * @typeParam Gossip - Gossip payload type.
- * @typeParam Offer - Offer payload type.
- * @typeParam Answer - Answer payload type.
- * @typeParam RPCRequest - Transaction and invocation request type.
- * @typeParam RPCResponse - Transaction response type.
+ * @typeParam Gossip - Gossip detail type.
+ * @typeParam Offer - Offer detail type.
+ * @typeParam Answer - Answer detail type.
+ * @typeParam RPCRequest - Request and invocation detail type.
+ * @typeParam RPCResponse - Response detail type.
  * @param buffer - MessagePack-encoded context.
  * @returns The decoded context, or `false` when decoding or validation fails.
  */
@@ -772,15 +771,15 @@ export function decodeContext<
   if (!ctx || typeof ctx !== 'object' || Array.isArray(ctx)) return false
 
   const value = ctx as Record<string, unknown>
-  const hasPayload = Object.hasOwn(value, 'payload')
+  const hasDetail = Object.hasOwn(value, 'detail')
 
   switch (value.kind) {
     case 'invoke':
-      if (!hasPayload) return false
+      if (!hasDetail) return false
       break
     case 'offer':
     case 'answer':
-      if (typeof value.id !== 'string' || !hasPayload) return false
+      if (typeof value.id !== 'string' || !hasDetail) return false
       break
     case 'withdraw':
       if (typeof value.id !== 'string') return false
@@ -789,15 +788,15 @@ export function decodeContext<
       if (
         typeof value.topic !== 'string' ||
         (value.from !== 'client' && value.from !== 'server') ||
-        !hasPayload
+        !hasDetail
       )
         return false
       break
-    case 'transact':
+    case 'request':
       if (
         typeof value.id !== 'string' ||
         (value.phase !== 'request' && value.phase !== 'response') ||
-        !hasPayload
+        !hasDetail
       )
         return false
       break
