@@ -51,10 +51,13 @@ export class OriginSocket<
     this.myTopics = new Set()
     this.myTransacts = new Map()
     this.myOffers = new Set()
+    this.originTopics = new Map()
+    this.upstreamQueue = []
+    this.upstreamTopics = new Map()
 
     this.broadcastChannel.onmessage = (
       event: MessageEvent<
-        Context<RPCRequest | RPCResponse | Gossip | Offer | Answer>
+        Context<Topic | RPCRequest | RPCResponse | Gossip | Offer | Answer>
       >
     ) => {
       const ctx = event.data
@@ -104,11 +107,36 @@ export class OriginSocket<
           if (!transaction) return
 
           void this.myTransacts!.delete(ctx.id)
+          void transaction.cleanup()
+          void transaction.resolve(ctx.payload as RPCResponse)
           return
         }
         return
       }
       if (ctx.kind === 'subscribe') {
+        if (!this.isLeader || ctx.from !== 'client') return
+
+        const topic = ctx.topic as Topic
+        const topicSubscribers = this.originTopics!.get(topic)
+        void this.originTopics!.set(
+          topic,
+          topicSubscribers ? topicSubscribers + 1 : 1
+        )
+        return void this.sendUpstream(ctx as Context<Topic>)
+      }
+      if (ctx.kind === 'unsubscribe') {
+        if (!this.isLeader || ctx.from !== 'client') return
+
+        const topic = ctx.topic as Topic
+        const topicSubscribers = this.originTopics!.get(topic)
+        if (!topicSubscribers) return
+
+        if (topicSubscribers === 1) {
+          void this.originTopics!.delete(topic)
+          return void this.sendUpstream(ctx as Context<Topic>)
+        }
+
+        return void this.originTopics!.set(topic, topicSubscribers - 1)
       }
     }
 
@@ -200,19 +228,19 @@ export class OriginSocket<
 
       const handleAbort = () => {
         void this.myTransacts!.delete(transactionId)
-        signal?.removeEventListener('abort', handleAbort)
+        void signal?.removeEventListener('abort', handleAbort)
 
-        reject(abortReason())
+        void reject(abortReason())
       }
 
       this.myTransacts!.set(transactionId, {
         resolve,
         reject,
         cleanup: () => {
-          signal?.removeEventListener('abort', handleAbort)
+          void signal?.removeEventListener('abort', handleAbort)
         },
       })
-      signal?.addEventListener('abort', handleAbort, { once: true })
+      void signal?.addEventListener('abort', handleAbort, { once: true })
 
       const ctx: Context<RPCRequest> = {
         kind: 'transact',
@@ -231,6 +259,7 @@ export class OriginSocket<
 
   subscribe(topic: Topic): void {
     if (this.isClosed) return
+    if (this.myTopics!.has(topic)) return
 
     void this.myTopics!.add(topic)
 
@@ -254,8 +283,7 @@ export class OriginSocket<
 
   unsubscribe(topic: Topic): void {
     if (this.isClosed) return
-
-    void this.myTopics!.delete(topic)
+    if (!this.myTopics!.delete(topic)) return
 
     const ctx: Context<Topic> = {
       kind: 'unsubscribe',
@@ -289,14 +317,14 @@ export class OriginSocket<
     if (!this.webSocket || this.webSocket.readyState !== WebSocket.OPEN) {
       if (self.navigator.onLine) {
         // Limit outbound queue to 64 entries
-        if (this.upstreamQueue!.length >= 64) this.upstreamQueue!.shift()
-        this.upstreamQueue!.push(ctx)
+        if (this.upstreamQueue!.length >= 64) void this.upstreamQueue!.shift()
+        void this.upstreamQueue!.push(ctx)
       }
       return
     }
 
     try {
-      this.webSocket.send(encode(ctx))
+      void this.webSocket.send(encode(ctx))
     } catch {}
   }
 
@@ -308,9 +336,9 @@ export class OriginSocket<
       if (!message) continue
 
       try {
-        this.webSocket.send(encode(message))
+        void this.webSocket.send(encode(message))
       } catch {
-        this.upstreamQueue!.unshift(message)
+        void this.upstreamQueue!.unshift(message)
         return
       }
     }
@@ -326,7 +354,7 @@ export class OriginSocket<
       while (!this.isClosed) {
         if (self.navigator.onLine !== true) return
 
-        await self.navigator.locks.request(
+        void (await self.navigator.locks.request(
           '@sovereignbase/origin-socket:leader',
           { ifAvailable: true },
           async (lockHandle) => {
@@ -347,7 +375,7 @@ export class OriginSocket<
             this.webSocket = socket
 
             socket.onopen = () => {
-              this.flushUpstreamQueue()
+              void this.flushUpstreamQueue()
             }
 
             socket.onmessage = (event: MessageEvent<ArrayBuffer>) => {
@@ -355,6 +383,8 @@ export class OriginSocket<
               if (ctx === undefined || typeof ctx !== 'object') return
 
               if (ctx?.kind === 'transact') {
+                if (ctx.phase !== 'response') return
+
                 const transaction = this.myTransacts!.get(ctx.id)
 
                 if (transaction) {
@@ -380,10 +410,16 @@ export class OriginSocket<
               }
 
               if (ctx?.kind === 'gossip') {
-                if (ctx.from === 'server') {
-                  void this.broadcastChannel!.postMessage(ctx)
-                }
-                return
+                if (ctx.from !== 'server') return
+
+                void this.broadcastChannel!.postMessage(ctx)
+                if (!this.myTopics!.has(ctx.topic as Topic)) return
+
+                return void this.eventTarget.dispatchEvent(
+                  new CustomEvent('gossip', {
+                    detail: ctx.payload as Gossip,
+                  })
+                )
               }
 
               if (ctx?.kind === 'subscribe') {
@@ -423,13 +459,15 @@ export class OriginSocket<
             }
 
             await new Promise<void>((resolve) => {
-              socket.addEventListener('close', () => resolve(), { once: true })
+              void socket.addEventListener('close', () => resolve(), {
+                once: true,
+              })
             })
 
             this.isLeader = false
             if (this.webSocket === socket) this.webSocket = null
           }
-        )
+        ))
 
         if (this.isClosed || self.navigator.onLine !== true) return
         await new Promise<void>((resolve) => setTimeout(resolve, 10_000))
@@ -444,10 +482,23 @@ export class OriginSocket<
    */
   close(): void {
     if (this.isClosed) return
+
+    for (const id of this.myOffers!) {
+      const ctx: Context<Offer> = { kind: 'withdraw', id }
+      if (this.isLeader) void this.sendUpstream(ctx)
+      else void this.broadcastChannel!.postMessage(ctx)
+    }
+
+    for (const topic of this.myTopics!) void this.unsubscribe(topic)
+
     this.isClosed = true
     void self.removeEventListener('online', this.onlineHandler)
 
     try {
+      for (const transaction of this.myTransacts!.values()) {
+        void transaction.cleanup()
+        void transaction.reject()
+      }
       void this.myTopics!.clear()
       void this.myTransacts!.clear()
       void this.myOffers!.clear()
@@ -460,14 +511,18 @@ export class OriginSocket<
 
     if (this.isLeader) {
       try {
-        void this.webSocket!.close(1000, 'closed')
-        void this.upstreamTopics!.clear()
-        this.isLeader = false
-        this.upstreamQueue!.length = 0
-        this.webSocket = null
-        this.upstreamQueue = null
+        void this.webSocket?.close(1000, 'closed')
       } catch {}
+      this.isLeader = false
+      this.webSocket = null
     }
+
+    void this.originTopics!.clear()
+    void this.upstreamTopics!.clear()
+    this.upstreamQueue!.length = 0
+    this.originTopics = null
+    this.upstreamTopics = null
+    this.upstreamQueue = null
   }
 
   /**
