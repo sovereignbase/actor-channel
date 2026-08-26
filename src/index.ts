@@ -564,7 +564,7 @@ export class OriginSocket<
   }
 }
 
-export function serverHandle<
+export function decodeContext<
   Topic extends string,
   Gossip,
   Offer,
@@ -574,12 +574,61 @@ export function serverHandle<
 >(
   buffer: ArrayBuffer
 ): Context<Topic | Gossip | Offer | Answer | RPCRequest | RPCResponse> | false {
-  const ctx = decode(buffer) as Context<
+  let ctx: unknown
+
+  try {
+    ctx = decode(buffer)
+  } catch {
+    return false
+  }
+
+  if (!ctx || typeof ctx !== 'object' || Array.isArray(ctx)) return false
+
+  const value = ctx as Record<string, unknown>
+  const hasPayload = Object.hasOwn(value, 'payload')
+
+  switch (value.kind) {
+    case 'invoke':
+      if (!hasPayload) return false
+      break
+    case 'offer':
+    case 'answer':
+      if (typeof value.id !== 'string' || !hasPayload) return false
+      break
+    case 'withdraw':
+      if (typeof value.id !== 'string') return false
+      break
+    case 'gossip':
+      if (
+        typeof value.topic !== 'string' ||
+        (value.from !== 'client' && value.from !== 'server') ||
+        !hasPayload
+      )
+        return false
+      break
+    case 'transact':
+      if (
+        typeof value.id !== 'string' ||
+        (value.phase !== 'request' && value.phase !== 'response') ||
+        !hasPayload
+      )
+        return false
+      break
+    case 'subscribe':
+    case 'unsubscribe':
+      if (
+        typeof value.topic !== 'string' ||
+        (value.from !== 'client' && value.from !== 'server')
+      )
+        return false
+      break
+    default:
+      return false
+  }
+
+  return value as Context<
     Topic | Gossip | Offer | Answer | RPCRequest | RPCResponse
   >
-
-  if (!ctx) return false
-  return ctx
 }
 
 export * from './types/index.js'
