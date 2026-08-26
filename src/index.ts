@@ -337,7 +337,30 @@ export class OriginSocket<
 
               if (ctx?.kind === 'subscribe') {
                 if (ctx?.from === 'server') {
-                  return void this.upstreamTopics!.set(ctx.topic as Topic, 1)
+                  const topicSubscribers = this.upstreamTopics!.get(
+                    ctx.topic as Topic
+                  )
+                  return void this.upstreamTopics!.set(
+                    ctx.topic as Topic,
+                    topicSubscribers ? topicSubscribers + 1 : 1
+                  )
+                }
+                return
+              }
+
+              if (ctx?.kind === 'unsubscribe') {
+                if (ctx?.from === 'server') {
+                  const topic = ctx.topic as Topic
+                  const topicSubscribers = this.upstreamTopics!.get(topic)
+                  if (!topicSubscribers) return
+
+                  if (topicSubscribers === 1)
+                    return void this.upstreamTopics!.delete(topic)
+
+                  return void this.upstreamTopics!.set(
+                    topic,
+                    topicSubscribers - 1
+                  )
                 }
                 return
               }
