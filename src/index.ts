@@ -9,7 +9,8 @@ import {
 export class OriginSocket<
   Topic extends string,
   Gossip,
-  Signal,
+  Offer,
+  Answer,
   RPCRequest,
   RPCResponse,
 > {
@@ -30,7 +31,7 @@ export class OriginSocket<
   private originTopics: Map<Topic, number> | null = null
   // A best effort offline queue mainly to allow calls before websocket is ready
   private upstreamQueue: Array<
-    Context<RPCRequest | RPCResponse | Gossip | Topic>
+    Context<RPCRequest | RPCResponse | Gossip | Offer | Topic>
   > | null = null
   // Leader keeps track of what upstream has ordered.
   private upstreamTopics: Map<Topic, number> | null = null
@@ -38,6 +39,7 @@ export class OriginSocket<
   // Pending transaction promises of this instance
   private myTransacts: Map<string, TransactionPromise<RPCResponse>> | null =
     null
+  private myOffers: Set<string> | null = null
   // Topics subscribed by  this instance
   private myTopics: Set<Topic> | null = null
 
@@ -48,9 +50,12 @@ export class OriginSocket<
     )
     this.myTopics = new Set()
     this.myTransacts = new Map()
+    this.myOffers = new Set()
 
     this.broadcastChannel.onmessage = (
-      event: MessageEvent<Context<RPCRequest | RPCResponse | Gossip | Signal>>
+      event: MessageEvent<
+        Context<RPCRequest | RPCResponse | Gossip | Offer | Answer>
+      >
     ) => {
       const ctx = event.data
       if (!ctx) return
@@ -59,6 +64,19 @@ export class OriginSocket<
         if (!this.isLeader) return
         void this.sendUpstream(ctx as Context<RPCRequest>)
         return
+      }
+
+      if (ctx.kind === 'offer' || ctx.kind === 'withdraw') {
+        if (!this.isLeader) return
+        return void this.sendUpstream(ctx as Context<Offer>)
+      }
+
+      if (ctx.kind === 'answer') {
+        if (!this.myOffers!.has(ctx.id)) return
+
+        return void this.eventTarget.dispatchEvent(
+          new CustomEvent('answer', { detail: ctx.payload as Answer })
+        )
       }
 
       if (ctx.kind === 'gossip') {
@@ -109,6 +127,30 @@ export class OriginSocket<
     return void this.broadcastChannel!.postMessage({ kind: 'invoke', payload })
   }
 
+  /**
+   * @example const withdraw = socket.offer(payload)
+   */
+  offer(payload: Offer): () => void {
+    if (this.isClosed) return () => {}
+
+    const id = crypto.randomUUID()
+    void this.myOffers!.add(id)
+
+    const ctx: Context<Offer> = { kind: 'offer', id, payload }
+
+    if (this.isLeader) void this.sendUpstream(ctx)
+    else void this.broadcastChannel!.postMessage(ctx)
+
+    return () => {
+      if (!this.myOffers?.delete(id)) return
+
+      const ctx: Context<Offer> = { kind: 'withdraw', id }
+
+      if (this.isLeader) void this.sendUpstream(ctx)
+      else void this.broadcastChannel?.postMessage(ctx)
+    }
+  }
+
   gossip(topic: Topic, payload: Gossip): void {
     if (this.isClosed) return
 
@@ -119,18 +161,12 @@ export class OriginSocket<
       payload,
     }
 
-    if (this.isLeader) void this.sendUpstream(ctx)
+    if (this.isLeader && this.upstreamTopics!.has(topic))
+      void this.sendUpstream(ctx)
 
     return void this.broadcastChannel!.postMessage(ctx)
   }
 
-  /**
-   * Sends a RPCRequest to the base station and resolves with the corresponding response message.
-   *
-   * @param message The message to send.
-   * @param options Options that control cancellation and stale follower cleanup.
-   * @returns A promise that resolves with the response message, or `false` when the RPCRequest cannot be issued.
-   */
   transact(
     payload: RPCRequest,
     signal?: AbortSignal
@@ -246,7 +282,7 @@ export class OriginSocket<
 
   //HELPER
   private sendUpstream(
-    ctx: Context<Topic | Gossip | RPCRequest | RPCResponse>
+    ctx: Context<Topic | Gossip | Offer | RPCRequest | RPCResponse>
   ) {
     if (!this.isLeader || !this.webSocketUrl) return
 
@@ -332,15 +368,22 @@ export class OriginSocket<
                 )
               }
 
-              if (ctx?.kind === 'signal') {
-                return void this.eventTarget.dispatchEvent(
-                  new CustomEvent('signal', {
-                    detail: ctx.payload as Signal,
-                  })
-                )
+              if (ctx?.kind === 'answer') {
+                if (this.myOffers!.has(ctx.id)) {
+                  return void this.eventTarget.dispatchEvent(
+                    new CustomEvent('answer', {
+                      detail: ctx.payload as Answer,
+                    })
+                  )
+                }
+                return void this.broadcastChannel!.postMessage(ctx)
               }
 
               if (ctx?.kind === 'gossip') {
+                if (ctx.from === 'server') {
+                  void this.broadcastChannel!.postMessage(ctx)
+                }
+                return
               }
 
               if (ctx?.kind === 'subscribe') {
@@ -407,9 +450,11 @@ export class OriginSocket<
     try {
       void this.myTopics!.clear()
       void this.myTransacts!.clear()
+      void this.myOffers!.clear()
       void this.broadcastChannel!.close()
       this.myTopics = null
       this.myTransacts = null
+      this.myOffers = null
       this.broadcastChannel = null
     } catch {}
 
@@ -432,9 +477,9 @@ export class OriginSocket<
    * @param listener The callback that receives the event.
    * @param options An options object that specifies characteristics about the event listener.
    */
-  addEventListener<K extends keyof OriginSocketEventMap<Gossip, Signal>>(
+  addEventListener<K extends keyof OriginSocketEventMap<Gossip, Answer>>(
     type: K,
-    listener: OriginSocketEventListenerFor<Gossip, Signal, K> | null,
+    listener: OriginSocketEventListenerFor<Gossip, Answer, K> | null,
     options?: boolean | AddEventListenerOptions
   ): void {
     void this.eventTarget.addEventListener(
@@ -451,9 +496,9 @@ export class OriginSocket<
    * @param listener The callback to remove.
    * @param options An options object that specifies characteristics about the event listener.
    */
-  removeEventListener<K extends keyof OriginSocketEventMap<Gossip, Signal>>(
+  removeEventListener<K extends keyof OriginSocketEventMap<Gossip, Answer>>(
     type: K,
-    listener: OriginSocketEventListenerFor<Gossip, Signal, K> | null,
+    listener: OriginSocketEventListenerFor<Gossip, Answer, K> | null,
     options?: boolean | EventListenerOptions
   ): void {
     void this.eventTarget.removeEventListener(
@@ -467,14 +512,15 @@ export class OriginSocket<
 export function serverHandle<
   Topic extends string,
   Gossip,
-  Signal,
+  Offer,
+  Answer,
   RPCRequest,
   RPCResponse,
 >(
   buffer: ArrayBuffer
-): Context<Topic | Gossip | Signal | RPCRequest | RPCResponse> | false {
+): Context<Topic | Gossip | Offer | Answer | RPCRequest | RPCResponse> | false {
   const ctx = decode(buffer) as Context<
-    Topic | Gossip | RPCRequest | RPCResponse
+    Topic | Gossip | Offer | Answer | RPCRequest | RPCResponse
   >
 
   if (!ctx) return false

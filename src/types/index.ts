@@ -4,7 +4,17 @@ export type Context<T> =
       payload: T
     }
   | {
-      kind: 'signal'
+      kind: 'offer'
+      id: string
+      payload: T
+    }
+  | {
+      kind: 'withdraw'
+      id: string
+    }
+  | {
+      kind: 'answer'
+      id: string
       payload: T
     }
   | {
@@ -33,9 +43,9 @@ export type Context<T> =
 /**
  * Maps OriginSocket event names to their event payload shapes.
  */
-export type OriginSocketEventMap<Gossip, Signal> = {
+export type OriginSocketEventMap<Gossip, Answer> = {
   gossip: Gossip
-  signal: Signal
+  answer: Answer
 }
 
 /**
@@ -43,13 +53,13 @@ export type OriginSocketEventMap<Gossip, Signal> = {
  */
 export type OriginSocketEventListener<
   Gossip,
-  Signal,
-  K extends keyof OriginSocketEventMap<Gossip, Signal>,
+  Answer,
+  K extends keyof OriginSocketEventMap<Gossip, Answer>,
 > =
-  | ((event: CustomEvent<OriginSocketEventMap<Gossip, Signal>[K]>) => void)
+  | ((event: CustomEvent<OriginSocketEventMap<Gossip, Answer>[K]>) => void)
   | {
       handleEvent(
-        event: CustomEvent<OriginSocketEventMap<Gossip, Signal>[K]>
+        event: CustomEvent<OriginSocketEventMap<Gossip, Answer>[K]>
       ): void
     }
 
@@ -58,10 +68,10 @@ export type OriginSocketEventListener<
  */
 export type OriginSocketEventListenerFor<
   Gossip,
-  Signal,
+  Answer,
   K extends string,
-> = K extends keyof OriginSocketEventMap<Gossip, Signal>
-  ? OriginSocketEventListener<Gossip, Signal, K>
+> = K extends keyof OriginSocketEventMap<Gossip, Answer>
+  ? OriginSocketEventListener<Gossip, Answer, K>
   : EventListenerOrEventListenerObject
 
 export type TransactionPromise<T> = {
