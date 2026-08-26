@@ -427,7 +427,11 @@ describe('OriginSocket client routing', () => {
       myOffers: Set<string>
       myTransacts: Map<
         string,
-        { resolve: (value: unknown) => void; reject: () => void; cleanup: () => void }
+        {
+          resolve: (value: unknown) => void
+          reject: () => void
+          cleanup: () => void
+        }
       >
     }
     const socket = new FakeWebSocket('ws://origin.test')
@@ -543,7 +547,11 @@ describe('OriginSocket client routing', () => {
 
     channelMessage(client, { kind: 'subscribe', from: 'server', topic: 'up' })
     channelMessage(client, { kind: 'subscribe', from: 'server', topic: 'up' })
-    channelMessage(client, { kind: 'subscribe', from: 'client', topic: 'local' })
+    channelMessage(client, {
+      kind: 'subscribe',
+      from: 'client',
+      topic: 'local',
+    })
     channelMessage(client, {
       kind: 'unsubscribe',
       from: 'server',
@@ -714,8 +722,10 @@ describe('OriginSocket client routing', () => {
 
     const originalLocks = navigatorState.locks
     navigatorState.locks = {
-      request: (_name: string, callback: (lock: Lock | null) => Promise<void>) =>
-        callback(null),
+      request: (
+        _name: string,
+        callback: (lock: Lock | null) => Promise<void>
+      ) => callback(null),
     } as unknown as FakeLockManager
     const noLock = createClient()
     await new Promise((resolve) => setTimeout(resolve, 0))
