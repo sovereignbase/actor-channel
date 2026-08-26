@@ -332,6 +332,14 @@ export class OriginSocket<
                 )
               }
 
+              if (ctx?.kind === 'signal') {
+                return void this.eventTarget.dispatchEvent(
+                  new CustomEvent('signal', {
+                    detail: ctx.payload as Signal,
+                  })
+                )
+              }
+
               if (ctx?.kind === 'gossip') {
               }
 
@@ -424,9 +432,9 @@ export class OriginSocket<
    * @param listener The callback that receives the event.
    * @param options An options object that specifies characteristics about the event listener.
    */
-  addEventListener<K extends keyof OriginSocketEventMap<Gossip | Signal>>(
+  addEventListener<K extends keyof OriginSocketEventMap<Gossip, Signal>>(
     type: K,
-    listener: OriginSocketEventListenerFor<Gossip | Signal, K> | null,
+    listener: OriginSocketEventListenerFor<Gossip, Signal, K> | null,
     options?: boolean | AddEventListenerOptions
   ): void {
     void this.eventTarget.addEventListener(
@@ -443,9 +451,9 @@ export class OriginSocket<
    * @param listener The callback to remove.
    * @param options An options object that specifies characteristics about the event listener.
    */
-  removeEventListener<K extends keyof OriginSocketEventMap<Gossip | Signal>>(
+  removeEventListener<K extends keyof OriginSocketEventMap<Gossip, Signal>>(
     type: K,
-    listener: OriginSocketEventListenerFor<Gossip | Signal, K> | null,
+    listener: OriginSocketEventListenerFor<Gossip, Signal, K> | null,
     options?: boolean | EventListenerOptions
   ): void {
     void this.eventTarget.removeEventListener(

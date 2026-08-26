@@ -33,29 +33,35 @@ export type Context<T> =
 /**
  * Maps OriginSocket event names to their event payload shapes.
  */
-export type OriginSocketEventMap<Gossip> = {
+export type OriginSocketEventMap<Gossip, Signal> = {
   gossip: Gossip
-  signal: null
+  signal: Signal
 }
 
 /**
  * Represents a strongly typed OriginSocket event listener.
  */
 export type OriginSocketEventListener<
-  T,
-  K extends keyof OriginSocketEventMap<T>,
+  Gossip,
+  Signal,
+  K extends keyof OriginSocketEventMap<Gossip, Signal>,
 > =
-  | ((event: CustomEvent<OriginSocketEventMap<T>[K]>) => void)
-  | { handleEvent(event: CustomEvent<OriginSocketEventMap<T>[K]>): void }
+  | ((event: CustomEvent<OriginSocketEventMap<Gossip, Signal>[K]>) => void)
+  | {
+      handleEvent(
+        event: CustomEvent<OriginSocketEventMap<Gossip, Signal>[K]>
+      ): void
+    }
 
 /**
  * Resolves an event name to its corresponding listener type.
  */
 export type OriginSocketEventListenerFor<
-  T,
+  Gossip,
+  Signal,
   K extends string,
-> = K extends keyof OriginSocketEventMap<T>
-  ? OriginSocketEventListener<T, K>
+> = K extends keyof OriginSocketEventMap<Gossip, Signal>
+  ? OriginSocketEventListener<Gossip, Signal, K>
   : EventListenerOrEventListenerObject
 
 export type TransactionPromise<T> = {
