@@ -6,6 +6,12 @@ import {
   TransactionPromise,
 } from './types/index.js'
 
+type ChannelMessage<T> =
+  | Context<T>
+  | { kind: 'online'; id: string }
+  | { kind: 'offline'; id: string | null }
+  | { kind: 'status' }
+
 export class OriginSocket<
   Topic extends string,
   Gossip,
@@ -21,19 +27,21 @@ export class OriginSocket<
   }
 
   private isLeader: boolean = false
+  private isOnline: boolean = false
+  private connectionId: string | null = null
   private isClosed: boolean = false
   private isConnecting: boolean = false
   //
   private broadcastChannel: BroadcastChannel | null = null
   private webSocket: WebSocket | null = null
 
-  // Leader keeps track of what others have ordered.
+  // Replicated topics ordered by local instances.
   private originTopics: Map<Topic, number> | null = null
   // A best effort offline queue mainly to allow calls before websocket is ready
   private upstreamQueue: Array<
     Context<RPCRequest | RPCResponse | Gossip | Offer | Topic>
   > | null = null
-  // Leader keeps track of what upstream has ordered.
+  // Replicated topics ordered by upstream.
   private upstreamTopics: Map<Topic, number> | null = null
 
   // Pending transaction promises of this instance
@@ -57,11 +65,47 @@ export class OriginSocket<
 
     this.broadcastChannel.onmessage = (
       event: MessageEvent<
-        Context<Topic | RPCRequest | RPCResponse | Gossip | Offer | Answer>
+        ChannelMessage<
+          Topic | RPCRequest | RPCResponse | Gossip | Offer | Answer
+        >
       >
     ) => {
       const ctx = event.data
       if (!ctx) return
+
+      if (ctx.kind === 'status') {
+        if (this.isLeader && this.isOnline)
+          void this.broadcastChannel!.postMessage({
+            kind: 'online',
+            id: this.connectionId!,
+          })
+        return
+      }
+      if (ctx.kind === 'online') {
+        this.connectionId = ctx.id
+        if (!this.isOnline) {
+          this.isOnline = true
+          void this.eventTarget.dispatchEvent(new CustomEvent('online'))
+        }
+        return
+      }
+      if (ctx.kind === 'offline') {
+        if (ctx.id !== this.connectionId) return
+        if (!this.isOnline) return
+        this.isOnline = false
+        this.connectionId = null
+        const reason = new DOMException(
+          'The upstream connection was lost.',
+          'NetworkError'
+        )
+        for (const transaction of this.myTransacts!.values()) {
+          void transaction.cleanup()
+          void transaction.reject(reason)
+        }
+        void this.myTransacts!.clear()
+        void this.eventTarget.dispatchEvent(new CustomEvent('offline'))
+        return
+      }
 
       if (ctx.kind === 'invoke') {
         if (!this.isLeader) return
@@ -114,31 +158,33 @@ export class OriginSocket<
         return
       }
       if (ctx.kind === 'subscribe') {
-        if (!this.isLeader || ctx.from !== 'client') return
-
         const topic = ctx.topic as Topic
-        const topicSubscribers = this.originTopics!.get(topic)
-        void this.originTopics!.set(
-          topic,
-          topicSubscribers ? topicSubscribers + 1 : 1
-        )
-        return void this.sendUpstream(ctx as Context<Topic>)
+        const topics =
+          ctx.from === 'server' ? this.upstreamTopics! : this.originTopics!
+        void topics.set(topic, (topics.get(topic) ?? 0) + 1)
+        if (this.isLeader && ctx.from === 'client')
+          void this.sendUpstream(ctx as Context<Topic>)
+        return
       }
       if (ctx.kind === 'unsubscribe') {
-        if (!this.isLeader || ctx.from !== 'client') return
-
         const topic = ctx.topic as Topic
-        const topicSubscribers = this.originTopics!.get(topic)
-        if (!topicSubscribers) return
-
-        if (topicSubscribers === 1) {
-          void this.originTopics!.delete(topic)
-          return void this.sendUpstream(ctx as Context<Topic>)
+        const topics =
+          ctx.from === 'server' ? this.upstreamTopics! : this.originTopics!
+        const subscribers = topics.get(topic)
+        if (!subscribers) return
+        if (subscribers > 1) {
+          void topics.set(topic, subscribers - 1)
+          return
         }
 
-        return void this.originTopics!.set(topic, topicSubscribers - 1)
+        void topics.delete(topic)
+        if (this.isLeader && ctx.from === 'client')
+          void this.sendUpstream(ctx as Context<Topic>)
+        return
       }
     }
+
+    void this.broadcastChannel.postMessage({ kind: 'status' })
 
     if (this.webSocketUrl && navigator.onLine) void this.upstreamConnect()
     if (this.webSocketUrl) {
@@ -146,13 +192,14 @@ export class OriginSocket<
     }
   }
 
-  invoke(payload: RPCRequest): void {
-    if (this.isClosed) return
+  invoke(payload: RPCRequest): boolean {
+    if (this.isClosed || !this.isOnline) return false
 
     if (this.isLeader)
-      return void this.sendUpstream({ kind: 'invoke', payload })
+      return this.sendUpstream({ kind: 'invoke', payload })
 
-    return void this.broadcastChannel!.postMessage({ kind: 'invoke', payload })
+    void this.broadcastChannel!.postMessage({ kind: 'invoke', payload })
+    return true
   }
 
   /**
@@ -179,8 +226,8 @@ export class OriginSocket<
     }
   }
 
-  gossip(topic: Topic, payload: Gossip): void {
-    if (this.isClosed) return
+  gossip(topic: Topic, payload: Gossip): boolean {
+    if (this.isClosed || !this.isOnline) return false
 
     const ctx: Context<Gossip> = {
       kind: 'gossip',
@@ -192,14 +239,15 @@ export class OriginSocket<
     if (this.isLeader && this.upstreamTopics!.has(topic))
       void this.sendUpstream(ctx)
 
-    return void this.broadcastChannel!.postMessage(ctx)
+    void this.broadcastChannel!.postMessage(ctx)
+    return true
   }
 
   transact(
     payload: RPCRequest,
     signal?: AbortSignal
   ): Promise<RPCResponse | false> {
-    if (this.isClosed) return Promise.resolve(false)
+    if (this.isClosed || !this.isOnline) return Promise.resolve(false)
 
     const transactionId = crypto.randomUUID()
 
@@ -210,19 +258,6 @@ export class OriginSocket<
 
       if (signal?.aborted) {
         void reject(abortReason())
-        return
-      }
-
-      if (!this.webSocketUrl || self.navigator.onLine !== true) {
-        void resolve(false)
-        return
-      }
-
-      if (
-        this.isLeader &&
-        (!this.webSocket || this.webSocket.readyState !== WebSocket.OPEN)
-      ) {
-        void resolve(false)
         return
       }
 
@@ -250,16 +285,21 @@ export class OriginSocket<
       }
 
       if (this.isLeader) {
-        return void this.sendUpstream(ctx)
+        if (this.sendUpstream(ctx)) return
+
+        void this.myTransacts!.delete(transactionId)
+        void signal?.removeEventListener('abort', handleAbort)
+        void resolve(false)
+        return
       }
 
-      return void this.broadcastChannel?.postMessage(ctx)
+      void this.broadcastChannel?.postMessage(ctx)
     })
   }
 
-  subscribe(topic: Topic): void {
-    if (this.isClosed) return
-    if (this.myTopics!.has(topic)) return
+  subscribe(topic: Topic): boolean {
+    if (this.isClosed || !this.isOnline) return false
+    if (this.myTopics!.has(topic)) return false
 
     void this.myTopics!.add(topic)
 
@@ -269,21 +309,20 @@ export class OriginSocket<
       from: 'client',
     }
 
-    if (this.isLeader) {
-      const topicSubscibers = this.originTopics!.get(topic)
-      void this.originTopics!.set(
-        topic,
-        topicSubscibers ? topicSubscibers + 1 : 1
-      )
-      void this.sendUpstream(ctx)
-    }
+    void this.originTopics!.set(
+      topic,
+      (this.originTopics!.get(topic) ?? 0) + 1
+    )
+    if (this.isLeader) void this.sendUpstream(ctx)
 
-    return void this.broadcastChannel?.postMessage(ctx)
+    void this.broadcastChannel?.postMessage(ctx)
+    return true
   }
 
-  unsubscribe(topic: Topic): void {
-    if (this.isClosed) return
-    if (!this.myTopics!.delete(topic)) return
+  unsubscribe(topic: Topic): boolean {
+    if (this.isClosed) return false
+    const online = this.isOnline
+    if (!this.myTopics!.delete(topic)) return false
 
     const ctx: Context<Topic> = {
       kind: 'unsubscribe',
@@ -291,28 +330,23 @@ export class OriginSocket<
       from: 'client',
     }
 
-    if (this.isLeader) {
-      let topicSubscibers = this.originTopics!.get(topic)
-      if (topicSubscibers) {
-        topicSubscibers -= 1
-
-        if (topicSubscibers == 0) {
-          this.originTopics!.delete(topic)
-          return void this.sendUpstream(ctx)
-        } else {
-          return void this.originTopics!.set(topic, topicSubscibers)
-        }
-      }
+    const subscribers = this.originTopics!.get(topic)
+    if (subscribers === 1) {
+      void this.originTopics!.delete(topic)
+      if (this.isLeader) void this.sendUpstream(ctx)
+    } else if (subscribers) {
+      void this.originTopics!.set(topic, subscribers - 1)
     }
 
-    return void this.broadcastChannel?.postMessage(ctx)
+    void this.broadcastChannel?.postMessage(ctx)
+    return online
   }
 
   //HELPER
   private sendUpstream(
     ctx: Context<Topic | Gossip | Offer | RPCRequest | RPCResponse>
-  ) {
-    if (!this.isLeader || !this.webSocketUrl) return
+  ): boolean {
+    if (!this.isLeader || !this.webSocketUrl) return false
 
     if (!this.webSocket || this.webSocket.readyState !== WebSocket.OPEN) {
       if (self.navigator.onLine) {
@@ -320,12 +354,15 @@ export class OriginSocket<
         if (this.upstreamQueue!.length >= 64) void this.upstreamQueue!.shift()
         void this.upstreamQueue!.push(ctx)
       }
-      return
+      return false
     }
 
     try {
       void this.webSocket.send(encode(ctx))
-    } catch {}
+      return true
+    } catch {
+      return false
+    }
   }
 
   private flushUpstreamQueue() {
@@ -356,10 +393,28 @@ export class OriginSocket<
 
         void (await self.navigator.locks.request(
           '@sovereignbase/origin-socket:web-lock',
-          { ifAvailable: true },
           async (lockHandle) => {
             if (!lockHandle || this.isClosed) return
             this.isLeader = true
+            const previousConnectionId = this.connectionId
+            if (this.isOnline) {
+              this.isOnline = false
+              this.connectionId = null
+              const reason = new DOMException(
+                'The upstream connection was lost.',
+                'NetworkError'
+              )
+              for (const transaction of this.myTransacts!.values()) {
+                void transaction.cleanup()
+                void transaction.reject(reason)
+              }
+              void this.myTransacts!.clear()
+              void this.eventTarget.dispatchEvent(new CustomEvent('offline'))
+            }
+            void this.broadcastChannel!.postMessage({
+              kind: 'offline',
+              id: previousConnectionId,
+            })
 
             let socket: WebSocket
 
@@ -376,6 +431,15 @@ export class OriginSocket<
 
             socket.onopen = () => {
               void this.flushUpstreamQueue()
+              this.connectionId = crypto.randomUUID()
+              if (!this.isOnline) {
+                this.isOnline = true
+                void this.eventTarget.dispatchEvent(new CustomEvent('online'))
+              }
+              void this.broadcastChannel!.postMessage({
+                kind: 'online',
+                id: this.connectionId!,
+              })
             }
 
             socket.onmessage = (event: MessageEvent<ArrayBuffer>) => {
@@ -427,10 +491,11 @@ export class OriginSocket<
                   const topicSubscribers = this.upstreamTopics!.get(
                     ctx.topic as Topic
                   )
-                  return void this.upstreamTopics!.set(
+                  void this.upstreamTopics!.set(
                     ctx.topic as Topic,
                     topicSubscribers ? topicSubscribers + 1 : 1
                   )
+                  return void this.broadcastChannel!.postMessage(ctx)
                 }
                 return
               }
@@ -442,12 +507,11 @@ export class OriginSocket<
                   if (!topicSubscribers) return
 
                   if (topicSubscribers === 1)
-                    return void this.upstreamTopics!.delete(topic)
+                    void this.upstreamTopics!.delete(topic)
+                  else
+                    void this.upstreamTopics!.set(topic, topicSubscribers - 1)
 
-                  return void this.upstreamTopics!.set(
-                    topic,
-                    topicSubscribers - 1
-                  )
+                  return void this.broadcastChannel!.postMessage(ctx)
                 }
                 return
               }
@@ -455,6 +519,27 @@ export class OriginSocket<
 
             socket.onclose = () => {
               if (this.webSocket === socket) this.webSocket = null
+              const connectionId = this.connectionId
+              if (this.isOnline) {
+                this.isOnline = false
+                this.connectionId = null
+                const reason = new DOMException(
+                  'The upstream connection was lost.',
+                  'NetworkError'
+                )
+                for (const transaction of this.myTransacts!.values()) {
+                  void transaction.cleanup()
+                  void transaction.reject(reason)
+                }
+                void this.myTransacts!.clear()
+                void this.eventTarget.dispatchEvent(
+                  new CustomEvent('offline')
+                )
+              }
+              void this.broadcastChannel?.postMessage({
+                kind: 'offline',
+                id: connectionId,
+              })
               this.isLeader = false
             }
 
@@ -483,6 +568,12 @@ export class OriginSocket<
   close(): void {
     if (this.isClosed) return
 
+    if (this.isLeader && this.isOnline)
+      void this.broadcastChannel!.postMessage({
+        kind: 'offline',
+        id: this.connectionId,
+      })
+
     for (const id of this.myOffers!) {
       const ctx: Context<Offer> = { kind: 'withdraw', id }
       if (this.isLeader) void this.sendUpstream(ctx)
@@ -493,6 +584,14 @@ export class OriginSocket<
 
     this.isClosed = true
     void self.removeEventListener('online', this.onlineHandler)
+
+    if (this.isLeader) {
+      try {
+        void this.webSocket?.close(1000, 'closed')
+      } catch {}
+      this.isLeader = false
+      this.webSocket = null
+    }
 
     try {
       for (const transaction of this.myTransacts!.values()) {
@@ -508,14 +607,6 @@ export class OriginSocket<
       this.myOffers = null
       this.broadcastChannel = null
     } catch {}
-
-    if (this.isLeader) {
-      try {
-        void this.webSocket?.close(1000, 'closed')
-      } catch {}
-      this.isLeader = false
-      this.webSocket = null
-    }
 
     void this.originTopics!.clear()
     void this.upstreamTopics!.clear()

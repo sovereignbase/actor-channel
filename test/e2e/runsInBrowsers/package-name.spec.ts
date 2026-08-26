@@ -54,19 +54,29 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     class FakeLockManager {
       held = false
+      queue: Array<() => void> = []
 
-      async request(
+      request(
         _name: string,
-        _options: LockOptions,
         callback: (lock: Lock | null) => Promise<void>
       ) {
-        if (this.held) return callback(null)
-        this.held = true
-        try {
-          await callback({} as Lock)
-        } finally {
-          this.held = false
-        }
+        return new Promise<void>((resolve, reject) => {
+          const run = async () => {
+            this.held = true
+            try {
+              await callback({} as Lock)
+              resolve()
+            } catch (error) {
+              reject(error)
+            } finally {
+              this.held = false
+              this.queue.shift()?.()
+            }
+          }
+
+          if (this.held) this.queue.push(() => void run())
+          else void run()
+        })
       }
     }
 
@@ -177,4 +187,48 @@ test('routes offer answers and cleanup in a browser', async ({ page }) => {
     ;(window as any).follower.close()
     ;(window as any).leader.close()
   })
+})
+
+test('rejects a transaction without replay after browser leader failover', async ({
+  page,
+}) => {
+  await page.evaluate(async (moduleUrl) => {
+    const { OriginSocket } = await import(moduleUrl)
+    const leader = new OriginSocket('ws://origin.test')
+    const follower = new OriginSocket('ws://origin.test')
+
+    Object.assign(window as any, { leader, follower, rejection: null })
+  }, `${baseUrl}/index.js`)
+
+  await expect
+    .poll(() => page.evaluate(() => (window as any).follower.isOnline))
+    .toBe(true)
+
+  await page.evaluate(() => {
+    void (window as any).follower
+      .transact({ method: 'write' })
+      .catch((error: DOMException) => {
+        ;(window as any).rejection = error.name
+      })
+  })
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).sockets[0].sent.length)
+    )
+    .toBe(1)
+
+  await page.evaluate(() => (window as any).leader.close())
+  await expect
+    .poll(() => page.evaluate(() => (window as any).rejection))
+    .toBe('NetworkError')
+  await expect
+    .poll(() => page.evaluate(() => (window as any).sockets.length))
+    .toBe(2)
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).sockets[1].sent.length)
+    )
+    .toBe(0)
+
+  await page.evaluate(() => (window as any).follower.close())
 })

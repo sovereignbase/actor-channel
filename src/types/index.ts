@@ -46,6 +46,8 @@ export type Context<T> =
 export type OriginSocketEventMap<Gossip, Answer> = {
   gossip: Gossip
   answer: Answer
+  online: null
+  offline: null
 }
 
 /**
@@ -76,6 +78,6 @@ export type OriginSocketEventListenerFor<
 
 export type TransactionPromise<T> = {
   resolve: (value: T) => void
-  reject: () => void
+  reject: (reason?: unknown) => void
   cleanup: () => void
 }

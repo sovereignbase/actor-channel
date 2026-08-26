@@ -57,20 +57,29 @@ class FakeWebSocket extends EventTarget {
 
 class FakeLockManager {
   private held = false
+  private queue: Array<() => void> = []
 
-  async request(
+  request(
     _name: string,
-    _options: LockOptions,
     callback: (lock: Lock | null) => Promise<void>
   ): Promise<void> {
-    if (this.held) return callback(null)
+    return new Promise<void>((resolve, reject) => {
+      const run = async () => {
+        this.held = true
+        try {
+          await callback({} as Lock)
+          resolve()
+        } catch (error) {
+          reject(error)
+        } finally {
+          this.held = false
+          this.queue.shift()?.()
+        }
+      }
 
-    this.held = true
-    try {
-      await callback({} as Lock)
-    } finally {
-      this.held = false
-    }
+      if (this.held) this.queue.push(() => void run())
+      else void run()
+    })
   }
 }
 
@@ -91,6 +100,11 @@ const createClient = () => {
 
 const sentContexts = (socket: FakeWebSocket) =>
   socket.sent.map((message) => decode(message) as Record<string, unknown>)
+
+const waitUntilOnline = (client: Client) =>
+  vi.waitFor(() =>
+    expect((client as unknown as { isOnline: boolean }).isOnline).toBe(true)
+  )
 
 beforeEach(() => {
   FakeWebSocket.instances = []
@@ -113,8 +127,9 @@ describe('OriginSocket client routing', () => {
     const follower = createClient()
     const socket = FakeWebSocket.instances[0]!
     await vi.waitFor(() => expect(socket.readyState).toBe(FakeWebSocket.OPEN))
+    await waitUntilOnline(follower)
 
-    follower.invoke({ method: 'refresh' })
+    expect(follower.invoke({ method: 'refresh' })).toBe(true)
     await vi.waitFor(() => expect(socket.sent).toHaveLength(1))
     expect(sentContexts(socket)[0]).toEqual({
       kind: 'invoke',
@@ -140,6 +155,7 @@ describe('OriginSocket client routing', () => {
     const leader = createClient()
     const follower = createClient()
     const socket = FakeWebSocket.instances[0]!
+    await waitUntilOnline(follower)
     const leaderAnswers: unknown[] = []
     const followerAnswers: unknown[] = []
     leader.addEventListener('answer', (event) =>
@@ -184,6 +200,7 @@ describe('OriginSocket client routing', () => {
     const leader = createClient()
     const follower = createClient()
     const socket = FakeWebSocket.instances[0]!
+    await waitUntilOnline(follower)
     const leaderGossip: unknown[] = []
     const followerGossip: unknown[] = []
     leader.addEventListener('gossip', (event) =>
@@ -193,9 +210,9 @@ describe('OriginSocket client routing', () => {
       followerGossip.push(event.detail)
     )
 
-    leader.subscribe('news')
-    leader.subscribe('news')
-    follower.subscribe('news')
+    expect(leader.subscribe('news')).toBe(true)
+    expect(leader.subscribe('news')).toBe(false)
+    expect(follower.subscribe('news')).toBe(true)
     await vi.waitFor(() => expect(socket.sent).toHaveLength(2))
 
     socket.receive({
@@ -241,6 +258,7 @@ describe('OriginSocket client routing', () => {
     createClient()
     const follower = createClient()
     const socket = FakeWebSocket.instances[0]!
+    await waitUntilOnline(follower)
 
     follower.subscribe('news')
     follower.offer({ roomId: 'room-1' })
@@ -254,5 +272,64 @@ describe('OriginSocket client routing', () => {
         .map(({ kind }) => kind)
         .sort()
     ).toEqual(['unsubscribe', 'withdraw'])
+  })
+
+  it('rejects a transaction without replaying it after failover', async () => {
+    const leader = createClient()
+    const follower = createClient()
+    const firstSocket = FakeWebSocket.instances[0]!
+    await waitUntilOnline(follower)
+
+    const response = follower.transact({ method: 'write' })
+    await vi.waitFor(() => expect(firstSocket.sent).toHaveLength(1))
+
+    leader.close()
+    await expect(response).rejects.toMatchObject({ name: 'NetworkError' })
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2))
+    const secondSocket = FakeWebSocket.instances[1]!
+    await vi.waitFor(() =>
+      expect(secondSocket.readyState).toBe(FakeWebSocket.OPEN)
+    )
+    expect(secondSocket.sent).toHaveLength(0)
+  })
+
+  it('keeps replicated origin and upstream topic counts after failover', async () => {
+    const leader = createClient()
+    const first = createClient()
+    const second = createClient()
+    const firstSocket = FakeWebSocket.instances[0]!
+    await waitUntilOnline(second)
+
+    first.subscribe('news')
+    second.subscribe('news')
+    await vi.waitFor(() => expect(firstSocket.sent).toHaveLength(2))
+    firstSocket.receive({
+      kind: 'subscribe',
+      from: 'server',
+      topic: 'presence',
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    leader.close()
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2))
+    const secondSocket = FakeWebSocket.instances[1]!
+    await vi.waitFor(() =>
+      expect(secondSocket.readyState).toBe(FakeWebSocket.OPEN)
+    )
+    await waitUntilOnline(first)
+
+    expect(first.gossip('presence', { message: 'online' })).toBe(true)
+    await vi.waitFor(() => expect(secondSocket.sent).toHaveLength(1))
+
+    first.unsubscribe('news')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(secondSocket.sent).toHaveLength(1)
+
+    second.unsubscribe('news')
+    await vi.waitFor(() => expect(secondSocket.sent).toHaveLength(2))
+    expect(sentContexts(secondSocket)[1]).toMatchObject({
+      kind: 'unsubscribe',
+      topic: 'news',
+    })
   })
 })

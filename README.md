@@ -14,6 +14,18 @@
 
 ## Behavior
 
+`invoke`, `gossip`, `subscribe`, and `unsubscribe` return whether the operation
+was accepted while the shared upstream connection was online. A `true` value is
+not a server acknowledgement.
+
+Pending transactions are rejected with a `NetworkError` when the upstream
+connection changes and are not replayed automatically. The server may already
+have processed a transaction whose response was lost, so mutating operations
+should be idempotent.
+
+The client emits `online` when the shared WebSocket opens and `offline` when
+that connection is lost.
+
 ## Tests
 
 ## License
