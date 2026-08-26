@@ -142,7 +142,9 @@ describe('OriginSocket client routing', () => {
     const socket = FakeWebSocket.instances[0]!
     const leaderAnswers: unknown[] = []
     const followerAnswers: unknown[] = []
-    leader.addEventListener('answer', (event) => leaderAnswers.push(event.detail))
+    leader.addEventListener('answer', (event) =>
+      leaderAnswers.push(event.detail)
+    )
     follower.addEventListener('answer', (event) =>
       followerAnswers.push(event.detail)
     )
@@ -184,7 +186,9 @@ describe('OriginSocket client routing', () => {
     const socket = FakeWebSocket.instances[0]!
     const leaderGossip: unknown[] = []
     const followerGossip: unknown[] = []
-    leader.addEventListener('gossip', (event) => leaderGossip.push(event.detail))
+    leader.addEventListener('gossip', (event) =>
+      leaderGossip.push(event.detail)
+    )
     follower.addEventListener('gossip', (event) =>
       followerGossip.push(event.detail)
     )
@@ -245,9 +249,10 @@ describe('OriginSocket client routing', () => {
 
     follower.close()
     await vi.waitFor(() => expect(socket.sent).toHaveLength(2))
-    expect(sentContexts(socket).map(({ kind }) => kind).sort()).toEqual([
-      'unsubscribe',
-      'withdraw',
-    ])
+    expect(
+      sentContexts(socket)
+        .map(({ kind }) => kind)
+        .sort()
+    ).toEqual(['unsubscribe', 'withdraw'])
   })
 })

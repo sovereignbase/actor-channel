@@ -162,9 +162,7 @@ test('routes offer answers and cleanup in a browser', async ({ page }) => {
 
   await page.evaluate(() => (window as any).withdraw())
   await expect
-    .poll(() =>
-      page.evaluate(() => (window as any).sockets[0].sent.length)
-    )
+    .poll(() => page.evaluate(() => (window as any).sockets[0].sent.length))
     .toBe(2)
 
   const withdrawBytes = await page.evaluate(
