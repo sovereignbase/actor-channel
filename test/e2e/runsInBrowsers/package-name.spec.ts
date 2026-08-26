@@ -56,10 +56,7 @@ test.beforeEach(async ({ page }) => {
       held = false
       queue: Array<() => void> = []
 
-      request(
-        _name: string,
-        callback: (lock: Lock | null) => Promise<void>
-      ) {
+      request(_name: string, callback: (lock: Lock | null) => Promise<void>) {
         return new Promise<void>((resolve, reject) => {
           const run = async () => {
             this.held = true
@@ -212,9 +209,7 @@ test('rejects a transaction without replay after browser leader failover', async
       })
   })
   await expect
-    .poll(() =>
-      page.evaluate(() => (window as any).sockets[0].sent.length)
-    )
+    .poll(() => page.evaluate(() => (window as any).sockets[0].sent.length))
     .toBe(1)
 
   await page.evaluate(() => (window as any).leader.close())
@@ -225,9 +220,7 @@ test('rejects a transaction without replay after browser leader failover', async
     .poll(() => page.evaluate(() => (window as any).sockets.length))
     .toBe(2)
   await expect
-    .poll(() =>
-      page.evaluate(() => (window as any).sockets[1].sent.length)
-    )
+    .poll(() => page.evaluate(() => (window as any).sockets[1].sent.length))
     .toBe(0)
 
   await page.evaluate(() => (window as any).follower.close())

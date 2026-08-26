@@ -195,8 +195,7 @@ export class OriginSocket<
   invoke(payload: RPCRequest): boolean {
     if (this.isClosed || !this.isOnline) return false
 
-    if (this.isLeader)
-      return this.sendUpstream({ kind: 'invoke', payload })
+    if (this.isLeader) return this.sendUpstream({ kind: 'invoke', payload })
 
     void this.broadcastChannel!.postMessage({ kind: 'invoke', payload })
     return true
@@ -309,10 +308,7 @@ export class OriginSocket<
       from: 'client',
     }
 
-    void this.originTopics!.set(
-      topic,
-      (this.originTopics!.get(topic) ?? 0) + 1
-    )
+    void this.originTopics!.set(topic, (this.originTopics!.get(topic) ?? 0) + 1)
     if (this.isLeader) void this.sendUpstream(ctx)
 
     void this.broadcastChannel?.postMessage(ctx)
@@ -532,9 +528,7 @@ export class OriginSocket<
                   void transaction.reject(reason)
                 }
                 void this.myTransacts!.clear()
-                void this.eventTarget.dispatchEvent(
-                  new CustomEvent('offline')
-                )
+                void this.eventTarget.dispatchEvent(new CustomEvent('offline'))
               }
               void this.broadcastChannel?.postMessage({
                 kind: 'offline',
