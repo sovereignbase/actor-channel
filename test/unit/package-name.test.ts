@@ -14,8 +14,11 @@ type Client = OriginSocket<
 class FakeWebSocket extends EventTarget {
   static readonly OPEN = 1
   static instances: FakeWebSocket[] = []
+  static throwOnConstruct = false
 
   readonly sent: Uint8Array[] = []
+  throwOnSend = false
+  throwOnClose = false
   binaryType = ''
   readyState = 0
   onopen: (() => void) | null = null
@@ -24,6 +27,7 @@ class FakeWebSocket extends EventTarget {
 
   constructor(readonly url: string) {
     super()
+    if (FakeWebSocket.throwOnConstruct) throw new Error('constructor failed')
     FakeWebSocket.instances.push(this)
     queueMicrotask(() => {
       this.readyState = FakeWebSocket.OPEN
@@ -32,6 +36,7 @@ class FakeWebSocket extends EventTarget {
   }
 
   send(data: Uint8Array): void {
+    if (this.throwOnSend) throw new Error('send failed')
     this.sent.push(data.slice())
   }
 
@@ -48,6 +53,7 @@ class FakeWebSocket extends EventTarget {
   }
 
   close(): void {
+    if (this.throwOnClose) throw new Error('close failed')
     if (this.readyState !== FakeWebSocket.OPEN) return
     this.readyState = 3
     this.onclose?.()
@@ -98,6 +104,19 @@ const createClient = () => {
   return client
 }
 
+const createOfflineClient = () => {
+  const client = new OriginSocket<
+    string,
+    { message: string },
+    { roomId: string },
+    { candidate: string },
+    { method: string },
+    { result: string }
+  >()
+  clients.push(client)
+  return client
+}
+
 const sentContexts = (socket: FakeWebSocket) =>
   socket.sent.map((message) => decode(message) as Record<string, unknown>)
 
@@ -106,8 +125,15 @@ const waitUntilOnline = (client: Client) =>
     expect((client as unknown as { isOnline: boolean }).isOnline).toBe(true)
   )
 
+const channelMessage = (client: Client, data: unknown) => {
+  const channel = (client as unknown as { broadcastChannel: BroadcastChannel })
+    .broadcastChannel
+  channel.onmessage?.(new MessageEvent('message', { data }))
+}
+
 beforeEach(() => {
   FakeWebSocket.instances = []
+  FakeWebSocket.throwOnConstruct = false
   const navigator = { onLine: true, locks: new FakeLockManager() }
   const worker = Object.assign(new EventTarget(), { navigator })
 
@@ -331,5 +357,426 @@ describe('OriginSocket client routing', () => {
       kind: 'unsubscribe',
       topic: 'news',
     })
+  })
+
+  it('covers public no-op, closed, abort, and listener behavior', async () => {
+    const offline = createOfflineClient()
+    expect(offline.invoke({ method: 'write' })).toBe(false)
+    expect(offline.gossip('news', { message: 'hello' })).toBe(false)
+    expect(offline.subscribe('news')).toBe(false)
+    expect(offline.unsubscribe('news')).toBe(false)
+    await expect(offline.transact({ method: 'write' })).resolves.toBe(false)
+
+    const listener = vi.fn()
+    offline.addEventListener('online', listener)
+    offline.removeEventListener('online', listener)
+    channelMessage(offline, { kind: 'online', id: 'connection' })
+    expect(listener).not.toHaveBeenCalled()
+
+    offline.close()
+    offline.close()
+    const withdraw = offline.offer({ roomId: 'closed' })
+    withdraw()
+    expect(offline.invoke({ method: 'closed' })).toBe(false)
+    expect(offline.gossip('news', { message: 'closed' })).toBe(false)
+    expect(offline.subscribe('news')).toBe(false)
+    expect(offline.unsubscribe('news')).toBe(false)
+    await expect(offline.transact({ method: 'closed' })).resolves.toBe(false)
+
+    const leader = createClient()
+    const follower = createClient()
+    const socket = FakeWebSocket.instances[0]!
+    await waitUntilOnline(follower)
+
+    const alreadyAborted = new AbortController()
+    const abortReason = new Error('already aborted')
+    alreadyAborted.abort(abortReason)
+    await expect(
+      follower.transact({ method: 'abort' }, alreadyAborted.signal)
+    ).rejects.toBe(abortReason)
+
+    const fallbackSignal = {
+      aborted: true,
+      reason: undefined,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as AbortSignal
+    await expect(
+      follower.transact({ method: 'abort' }, fallbackSignal)
+    ).rejects.toMatchObject({ name: 'AbortError' })
+
+    const controller = new AbortController()
+    const pending = follower.transact({ method: 'abort' }, controller.signal)
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1))
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(leader).toBeDefined()
+  })
+
+  it('handles every BroadcastChannel message direction', () => {
+    const client = createOfflineClient()
+    const state = client as unknown as {
+      isLeader: boolean
+      isOnline: boolean
+      connectionId: string | null
+      webSocketUrl: string
+      webSocket: FakeWebSocket | null
+      upstreamTopics: Map<string, number>
+      originTopics: Map<string, number>
+      myTopics: Set<string>
+      myOffers: Set<string>
+      myTransacts: Map<
+        string,
+        { resolve: (value: unknown) => void; reject: () => void; cleanup: () => void }
+      >
+    }
+    const socket = new FakeWebSocket('ws://origin.test')
+    socket.readyState = FakeWebSocket.OPEN
+    state.webSocketUrl = 'ws://origin.test'
+    state.webSocket = socket
+
+    channelMessage(client, null)
+    channelMessage(client, { kind: 'status' })
+    channelMessage(client, { kind: 'online', id: 'first' })
+    channelMessage(client, { kind: 'online', id: 'first' })
+    channelMessage(client, { kind: 'offline', id: 'stale' })
+    state.isOnline = false
+    state.connectionId = 'offline'
+    channelMessage(client, { kind: 'offline', id: 'offline' })
+
+    const reject = vi.fn()
+    const cleanup = vi.fn()
+    state.isOnline = true
+    state.connectionId = 'active'
+    state.myTransacts.set('pending', {
+      resolve: vi.fn(),
+      reject,
+      cleanup,
+    })
+    channelMessage(client, { kind: 'offline', id: 'active' })
+    expect(reject).toHaveBeenCalledOnce()
+    expect(cleanup).toHaveBeenCalledOnce()
+
+    channelMessage(client, { kind: 'invoke', payload: { method: 'ignored' } })
+    channelMessage(client, {
+      kind: 'offer',
+      id: 'ignored',
+      payload: { roomId: 'ignored' },
+    })
+    channelMessage(client, { kind: 'withdraw', id: 'ignored' })
+    channelMessage(client, {
+      kind: 'transact',
+      id: 'ignored',
+      phase: 'request',
+      payload: { method: 'ignored' },
+    })
+
+    state.isLeader = true
+    state.isOnline = true
+    state.connectionId = 'leader'
+    channelMessage(client, { kind: 'status' })
+    channelMessage(client, { kind: 'invoke', payload: { method: 'invoke' } })
+    channelMessage(client, {
+      kind: 'offer',
+      id: 'offer',
+      payload: { roomId: 'room' },
+    })
+    channelMessage(client, { kind: 'withdraw', id: 'offer' })
+
+    const answers: unknown[] = []
+    const gossip: unknown[] = []
+    client.addEventListener('answer', (event) => answers.push(event.detail))
+    client.addEventListener('gossip', (event) => gossip.push(event.detail))
+    channelMessage(client, {
+      kind: 'answer',
+      id: 'missing',
+      payload: { candidate: 'missing' },
+    })
+    state.myOffers.add('owned')
+    channelMessage(client, {
+      kind: 'answer',
+      id: 'owned',
+      payload: { candidate: 'owned' },
+    })
+
+    channelMessage(client, {
+      kind: 'gossip',
+      from: 'client',
+      topic: 'ignored',
+      payload: { message: 'ignored' },
+    })
+    state.upstreamTopics.set('news', 1)
+    state.myTopics.add('news')
+    channelMessage(client, {
+      kind: 'gossip',
+      from: 'client',
+      topic: 'news',
+      payload: { message: 'client' },
+    })
+    channelMessage(client, {
+      kind: 'gossip',
+      from: 'server',
+      topic: 'news',
+      payload: { message: 'server' },
+    })
+
+    channelMessage(client, {
+      kind: 'transact',
+      id: 'request',
+      phase: 'request',
+      payload: { method: 'request' },
+    })
+    channelMessage(client, {
+      kind: 'transact',
+      id: 'missing',
+      phase: 'response',
+      payload: { result: 'missing' },
+    })
+    const resolve = vi.fn()
+    state.myTransacts.set('owned', { resolve, reject: vi.fn(), cleanup })
+    channelMessage(client, {
+      kind: 'transact',
+      id: 'owned',
+      phase: 'response',
+      payload: { result: 'owned' },
+    })
+
+    channelMessage(client, { kind: 'subscribe', from: 'server', topic: 'up' })
+    channelMessage(client, { kind: 'subscribe', from: 'server', topic: 'up' })
+    channelMessage(client, { kind: 'subscribe', from: 'client', topic: 'local' })
+    channelMessage(client, {
+      kind: 'unsubscribe',
+      from: 'server',
+      topic: 'missing',
+    })
+    channelMessage(client, { kind: 'unsubscribe', from: 'server', topic: 'up' })
+    channelMessage(client, { kind: 'unsubscribe', from: 'server', topic: 'up' })
+    channelMessage(client, {
+      kind: 'unsubscribe',
+      from: 'client',
+      topic: 'local',
+    })
+
+    expect(answers).toEqual([{ candidate: 'owned' }])
+    expect(gossip).toEqual([{ message: 'client' }, { message: 'server' }])
+    expect(resolve).toHaveBeenCalledWith({ result: 'owned' })
+  })
+
+  it('handles transport queues and WebSocket send failures', async () => {
+    const client = createOfflineClient()
+    const state = client as any
+    const context = { kind: 'invoke', payload: { method: 'write' } }
+
+    expect(state.sendUpstream(context)).toBe(false)
+    state.isLeader = true
+    expect(state.sendUpstream(context)).toBe(false)
+    state.webSocketUrl = 'ws://origin.test'
+    expect(state.sendUpstream(context)).toBe(false)
+    expect(state.upstreamQueue).toHaveLength(1)
+
+    for (let index = 0; index < 65; index++) state.sendUpstream(context)
+    expect(state.upstreamQueue).toHaveLength(64)
+
+    ;(navigator as unknown as { onLine: boolean }).onLine = false
+    state.upstreamQueue.length = 0
+    expect(state.sendUpstream(context)).toBe(false)
+    expect(state.upstreamQueue).toHaveLength(0)
+    ;(navigator as unknown as { onLine: boolean }).onLine = true
+
+    state.flushUpstreamQueue()
+    const socket = new FakeWebSocket('ws://origin.test')
+    state.webSocket = socket
+    state.flushUpstreamQueue()
+    socket.readyState = FakeWebSocket.OPEN
+    state.upstreamQueue.push(undefined, context)
+    state.flushUpstreamQueue()
+    expect(socket.sent).toHaveLength(1)
+
+    socket.throwOnSend = true
+    expect(state.sendUpstream(context)).toBe(false)
+    state.upstreamQueue.push(context)
+    state.flushUpstreamQueue()
+    expect(state.upstreamQueue).toHaveLength(1)
+    socket.throwOnSend = false
+    expect(state.sendUpstream(context)).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+
+  it('covers direct leader operations and inbound WebSocket branches', async () => {
+    const leader = createClient()
+    const socket = FakeWebSocket.instances[0]!
+    await waitUntilOnline(leader)
+
+    expect(leader.invoke({ method: 'invoke' })).toBe(true)
+    const withdraw = leader.offer({ roomId: 'room' })
+    const offer = sentContexts(socket).find(({ kind }) => kind === 'offer')!
+    const answers: unknown[] = []
+    leader.addEventListener('answer', (event) => answers.push(event.detail))
+    socket.receive({
+      kind: 'answer',
+      id: offer.id,
+      payload: { candidate: 'answer' },
+    })
+    withdraw()
+
+    const response = leader.transact({ method: 'read' })
+    const transaction = sentContexts(socket).find(
+      ({ kind }) => kind === 'transact'
+    )!
+    socket.receive({
+      kind: 'transact',
+      phase: 'response',
+      id: transaction.id,
+      payload: { result: 'done' },
+    })
+    await expect(response).resolves.toEqual({ result: 'done' })
+
+    socket.throwOnSend = true
+    await expect(leader.transact({ method: 'failed' })).resolves.toBe(false)
+    socket.throwOnSend = false
+
+    expect(leader.subscribe('direct')).toBe(true)
+    expect(leader.unsubscribe('direct')).toBe(true)
+    socket.receive(1)
+    socket.receive({
+      kind: 'transact',
+      phase: 'request',
+      id: 'request',
+      payload: { method: 'ignored' },
+    })
+    socket.receive({
+      kind: 'gossip',
+      from: 'client',
+      topic: 'ignored',
+      payload: { message: 'ignored' },
+    })
+    socket.receive({
+      kind: 'gossip',
+      from: 'server',
+      topic: 'unsubscribed',
+      payload: { message: 'ignored' },
+    })
+    socket.receive({ kind: 'subscribe', from: 'client', topic: 'ignored' })
+    socket.receive({ kind: 'unsubscribe', from: 'client', topic: 'ignored' })
+    socket.receive({ kind: 'unsubscribe', from: 'server', topic: 'missing' })
+
+    expect(answers).toEqual([{ candidate: 'answer' }])
+  })
+
+  it('rejects a leader transaction when its socket closes', async () => {
+    const leader = createClient()
+    const socket = FakeWebSocket.instances[0]!
+    await waitUntilOnline(leader)
+    const response = leader.transact({ method: 'pending' })
+    socket.close()
+    await expect(response).rejects.toMatchObject({ name: 'NetworkError' })
+  })
+
+  it('rejects follower transactions when that instance closes', async () => {
+    createClient()
+    const follower = createClient()
+    await waitUntilOnline(follower)
+    const response = follower.transact({ method: 'pending' })
+    follower.close()
+    await expect(response).rejects.toBeUndefined()
+  })
+
+  it('covers connection guards, constructor failure, and online retry', async () => {
+    const offline = createOfflineClient()
+    const state = offline as any
+    await state.upstreamConnect()
+    state.isConnecting = true
+    state.webSocketUrl = 'ws://origin.test'
+    await state.upstreamConnect()
+    state.isConnecting = false
+    state.isClosed = true
+    await state.upstreamConnect()
+    state.isClosed = false
+
+    const navigatorState = navigator as unknown as {
+      onLine: boolean
+      locks?: FakeLockManager
+    }
+    const locks = navigatorState.locks
+    navigatorState.locks = undefined
+    await state.upstreamConnect()
+    navigatorState.locks = locks
+    navigatorState.onLine = false
+    await state.upstreamConnect()
+    self.dispatchEvent(new Event('online'))
+    navigatorState.onLine = true
+
+    FakeWebSocket.throwOnConstruct = true
+    const failed = createClient()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    failed.close()
+    FakeWebSocket.throwOnConstruct = false
+
+    const originalLocks = navigatorState.locks
+    navigatorState.locks = {
+      request: (_name: string, callback: (lock: Lock | null) => Promise<void>) =>
+        callback(null),
+    } as unknown as FakeLockManager
+    const noLock = createClient()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    noLock.close()
+    navigatorState.locks = originalLocks
+  })
+
+  it('retries after the reconnect delay and handles close failures', async () => {
+    vi.useFakeTimers()
+    const client = createClient()
+    const socket = FakeWebSocket.instances[0]!
+    await vi.runAllTicks()
+    socket.close()
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(FakeWebSocket.instances.length).toBeGreaterThan(1)
+    client.close()
+    vi.useRealTimers()
+
+    const closeFailure = createClient()
+    const failedSocket = FakeWebSocket.instances.at(-1)!
+    await waitUntilOnline(closeFailure)
+    failedSocket.throwOnClose = true
+    closeFailure.close()
+
+    const channelFailure = createOfflineClient()
+    const channel = (channelFailure as any).broadcastChannel as BroadcastChannel
+    const close = channel.close.bind(channel)
+    channel.close = () => {
+      throw new Error('close failed')
+    }
+    channelFailure.close()
+    close()
+  })
+
+  it('covers the remaining event and connection branches', async () => {
+    const offline = createOfflineClient()
+    await (offline as any).onlineHandler()
+    channelMessage(offline, { kind: 'unknown' })
+
+    const first = createClient()
+    const firstSocket = FakeWebSocket.instances.at(-1)!
+    await waitUntilOnline(first)
+    firstSocket.onopen?.()
+    firstSocket.receive({ kind: 'unknown' })
+
+    const firstState = first as any
+    firstState.isClosed = true
+    firstState.isOnline = false
+    firstState.webSocket = null
+    firstSocket.onclose?.()
+    firstSocket.dispatchEvent(new Event('close'))
+    await Promise.resolve()
+
+    const second = createClient()
+    await waitUntilOnline(second)
+    const secondSocket = FakeWebSocket.instances.at(-1)!
+    const secondState = second as any
+    secondState.isClosed = true
+    secondSocket.onclose?.()
+    secondState.webSocket = secondSocket
+    secondSocket.dispatchEvent(new Event('close'))
+    await vi.waitFor(() => expect(secondState.webSocket).toBeNull())
   })
 })

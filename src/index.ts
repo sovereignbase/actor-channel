@@ -12,6 +12,23 @@ type ChannelMessage<T> =
   | { kind: 'offline'; id: string | null }
   | { kind: 'status' }
 
+/**
+ * Shares one upstream WebSocket connection between same-origin browser
+ * contexts.
+ *
+ * One instance holds the Web Lock and owns the connection. Other instances
+ * route operations through it over a BroadcastChannel. Leadership and the
+ * connection are recovered automatically when the owning context disappears.
+ *
+ * @typeParam Topic - Topic names accepted by {@link subscribe},
+ *   {@link unsubscribe}, and {@link gossip}.
+ * @typeParam Gossip - Payload sent and received through gossip events.
+ * @typeParam Offer - Payload sent by {@link offer}.
+ * @typeParam Answer - Payload received by answer events.
+ * @typeParam RPCRequest - Payload accepted by {@link invoke} and
+ *   {@link transact}.
+ * @typeParam RPCResponse - Payload resolved by {@link transact}.
+ */
 export class OriginSocket<
   Topic extends string,
   Gossip,
@@ -51,6 +68,13 @@ export class OriginSocket<
   // Topics subscribed by  this instance
   private myTopics: Set<Topic> | null = null
 
+  /**
+   * Creates an OriginSocket instance.
+   *
+   * @param webSocketUrl - Upstream WebSocket URL. An empty URL creates an
+   *   instance that can participate locally but cannot own the upstream
+   *   connection.
+   */
   constructor(webSocketUrl: string = '') {
     this.webSocketUrl = webSocketUrl
     this.broadcastChannel = new BroadcastChannel(
@@ -192,6 +216,13 @@ export class OriginSocket<
     }
   }
 
+  /**
+   * Sends a fire-and-forget request upstream.
+   *
+   * @param payload - Request payload.
+   * @returns `true` when the operation was accepted while the shared
+   *   connection was online; this is not a server acknowledgement.
+   */
   invoke(payload: RPCRequest): boolean {
     if (this.isClosed || !this.isOnline) return false
 
@@ -202,7 +233,19 @@ export class OriginSocket<
   }
 
   /**
-   * @example const withdraw = socket.offer(payload)
+   * Publishes an offer that remains active until withdrawn or the instance is
+   * closed.
+   *
+   * Offer identifiers are managed internally. Matching answers are emitted as
+   * `answer` events on this instance.
+   *
+   * @param payload - Offer payload.
+   * @returns An idempotent function that withdraws the offer.
+   * @example
+   * ```ts
+   * const withdraw = socket.offer(payload)
+   * withdraw()
+   * ```
    */
   offer(payload: Offer): () => void {
     if (this.isClosed) return () => {}
@@ -225,6 +268,14 @@ export class OriginSocket<
     }
   }
 
+  /**
+   * Publishes a payload to a topic.
+   *
+   * @param topic - Destination topic.
+   * @param payload - Gossip payload.
+   * @returns `true` when the operation was accepted while the shared
+   *   connection was online; this is not a server acknowledgement.
+   */
   gossip(topic: Topic, payload: Gossip): boolean {
     if (this.isClosed || !this.isOnline) return false
 
@@ -242,6 +293,20 @@ export class OriginSocket<
     return true
   }
 
+  /**
+   * Sends a request and waits for its matching response.
+   *
+   * Pending transactions are not replayed. They reject with a `NetworkError`
+   * when the shared connection changes, even when the server may already have
+   * processed the request.
+   *
+   * @param payload - Request payload.
+   * @param signal - Optional signal used to abort the transaction.
+   * @returns The response payload, or `false` when the operation cannot be sent
+   *   because the instance is closed or the shared connection is offline.
+   * @throws The abort reason when `signal` is aborted.
+   * @throws A `DOMException` named `NetworkError` if the connection is lost.
+   */
   transact(
     payload: RPCRequest,
     signal?: AbortSignal
@@ -296,6 +361,16 @@ export class OriginSocket<
     })
   }
 
+  /**
+   * Subscribes this instance to a topic.
+   *
+   * Repeated local subscriptions are ignored. The shared upstream subscription
+   * is removed only after every local subscriber has unsubscribed.
+   *
+   * @param topic - Topic to subscribe to.
+   * @returns `true` when a new subscription was accepted while online, or
+   *   `false` when closed, offline, or already subscribed.
+   */
   subscribe(topic: Topic): boolean {
     if (this.isClosed || !this.isOnline) return false
     if (this.myTopics!.has(topic)) return false
@@ -315,6 +390,13 @@ export class OriginSocket<
     return true
   }
 
+  /**
+   * Removes this instance's subscription to a topic.
+   *
+   * @param topic - Topic to unsubscribe from.
+   * @returns `true` when the subscription existed and the shared connection was
+   *   online. Returns `false` when closed, not subscribed, or offline.
+   */
   unsubscribe(topic: Topic): boolean {
     if (this.isClosed) return false
     const online = this.isOnline
@@ -338,7 +420,7 @@ export class OriginSocket<
     return online
   }
 
-  //HELPER
+  /** Sends or queues a context for the connection-owning instance. */
   private sendUpstream(
     ctx: Context<Topic | Gossip | Offer | RPCRequest | RPCResponse>
   ): boolean {
@@ -361,6 +443,7 @@ export class OriginSocket<
     }
   }
 
+  /** Sends queued contexts in insertion order while the socket is open. */
   private flushUpstreamQueue() {
     if (!this.webSocket || this.webSocket.readyState !== WebSocket.OPEN) return
 
@@ -377,6 +460,7 @@ export class OriginSocket<
     }
   }
 
+  /** Acquires leadership and maintains the shared upstream connection. */
   private async upstreamConnect() {
     if (this.isClosed || this.isConnecting || !this.webSocketUrl) return
     if (!self.navigator.locks) return
@@ -555,9 +639,12 @@ export class OriginSocket<
       this.isConnecting = false
     }
   }
-  // UTIL
+
   /**
-   * Closes the client and releases its local and remote resources.
+   * Closes the instance and releases its local and shared resources.
+   *
+   * Active offers and subscriptions are withdrawn, and pending transactions
+   * are rejected. Calling `close` more than once has no effect.
    */
   close(): void {
     if (this.isClosed) return
@@ -611,11 +698,11 @@ export class OriginSocket<
   }
 
   /**
-   * Appends an event listener for events whose type attribute value is `type`.
+   * Registers a typed OriginSocket event listener.
    *
-   * @param type The event type to listen for.
-   * @param listener The callback that receives the event.
-   * @param options An options object that specifies characteristics about the event listener.
+   * @param type - Event type to listen for.
+   * @param listener - Callback or listener object that receives the event.
+   * @param options - Event listener options.
    */
   addEventListener<K extends keyof OriginSocketEventMap<Gossip, Answer>>(
     type: K,
@@ -632,9 +719,9 @@ export class OriginSocket<
   /**
    * Removes an event listener previously registered with {@link addEventListener}.
    *
-   * @param type The event type to remove.
-   * @param listener The callback to remove.
-   * @param options An options object that specifies characteristics about the event listener.
+   * @param type - Event type to remove.
+   * @param listener - Callback or listener object to remove.
+   * @param options - Event listener options.
    */
   removeEventListener<K extends keyof OriginSocketEventMap<Gossip, Answer>>(
     type: K,
@@ -649,6 +736,21 @@ export class OriginSocket<
   }
 }
 
+/**
+ * Decodes and validates a MessagePack-encoded OriginSocket context.
+ *
+ * Validation covers the context discriminator and routing fields. Payloads are
+ * intentionally opaque and are returned as the caller-provided generic types.
+ *
+ * @typeParam Topic - Topic name type.
+ * @typeParam Gossip - Gossip payload type.
+ * @typeParam Offer - Offer payload type.
+ * @typeParam Answer - Answer payload type.
+ * @typeParam RPCRequest - Transaction and invocation request type.
+ * @typeParam RPCResponse - Transaction response type.
+ * @param buffer - MessagePack-encoded context.
+ * @returns The decoded context, or `false` when decoding or validation fails.
+ */
 export function decodeContext<
   Topic extends string,
   Gossip,
