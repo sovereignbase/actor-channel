@@ -355,7 +355,7 @@ export class OriginSocket<
         if (self.navigator.onLine !== true) return
 
         void (await self.navigator.locks.request(
-          '@sovereignbase/origin-socket:leader',
+          '@sovereignbase/origin-socket:web-lock',
           { ifAvailable: true },
           async (lockHandle) => {
             if (!lockHandle || this.isClosed) return
