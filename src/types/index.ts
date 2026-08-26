@@ -5,7 +5,6 @@ export type Context<T> =
     }
   | {
       kind: 'signal'
-      from: 'server' | 'client'
       payload: T
     }
   | {

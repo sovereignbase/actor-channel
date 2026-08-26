@@ -18,33 +18,36 @@ export class OriginSocket<
   private readonly onlineHandler = async () => {
     void this.upstreamConnect()
   }
-  private broadcastChannel: BroadcastChannel = new BroadcastChannel(
-    '@sovereignbase/origin-socket:channel'
-  )
-  private webSocket: WebSocket | null = null
+
   private isLeader: boolean = false
   private isClosed: boolean = false
   private isConnecting: boolean = false
+  //
+  private broadcastChannel: BroadcastChannel | null = null
+  private webSocket: WebSocket | null = null
 
-  private readonly originTopics: Map<Topic, number> | undefined
+  // Leader keeps track of what others have ordered.
+  private originTopics: Map<Topic, number> | null = null
+  // A best effort offline queue mainly to allow calls before websocket is ready
+  private upstreamQueue: Array<
+    Context<RPCRequest | RPCResponse | Gossip | Topic>
+  > | null = null
+  // Leader keeps track of what upstream has ordered.
+  private upstreamTopics: Map<Topic, number> | null = null
 
-  private readonly upstreamQueue:
-    Array<Context<RPCRequest | RPCResponse | Gossip | Topic>> | undefined
-  private readonly upstreamTopics: Map<Topic, number> | undefined
+  // Pending transaction promises of this instance
+  private myTransacts: Map<string, TransactionPromise<RPCResponse>> | null =
+    null
+  // Topics subscribed by  this instance
+  private myTopics: Set<Topic> | null = null
 
-  private readonly myTransacts = new Map<
-    string,
-    TransactionPromise<RPCResponse>
-  >()
-  private readonly myTopics: Set<Topic> = new Set()
-
-  /**
-   * Initializes a new {@link StationClient} instance.
-   *
-   * @param webSocketUrl The base station WebSocket URL. When omitted, the instance operates in local-only mode.
-   */
   constructor(webSocketUrl: string = '') {
     this.webSocketUrl = webSocketUrl
+    this.broadcastChannel = new BroadcastChannel(
+      '@sovereignbase/origin-socket:channel'
+    )
+    this.myTopics = new Set()
+    this.myTransacts = new Map()
 
     this.broadcastChannel.onmessage = (
       event: MessageEvent<Context<RPCRequest | RPCResponse | Gossip | Signal>>
@@ -66,7 +69,7 @@ export class OriginSocket<
         )
           void this.sendUpstream(ctx as Context<Gossip>)
 
-        if (!this.myTopics.has(ctx.topic as Topic)) return
+        if (!this.myTopics!.has(ctx.topic as Topic)) return
 
         return void this.eventTarget.dispatchEvent(
           new CustomEvent('gossip', { detail: ctx.payload as Gossip })
@@ -79,10 +82,10 @@ export class OriginSocket<
           else void this.sendUpstream(ctx as Context<RPCRequest>)
         }
         if (ctx.phase === 'response') {
-          const transaction = this.myTransacts.get(ctx.id)
+          const transaction = this.myTransacts!.get(ctx.id)
           if (!transaction) return
 
-          void this.myTransacts.delete(ctx.id)
+          void this.myTransacts!.delete(ctx.id)
           return
         }
         return
@@ -97,18 +100,13 @@ export class OriginSocket<
     }
   }
 
-  /**
-   * Broadcasts a message to other same-origin contexts and opportunistically forwards it to the base station.
-   *
-   * @param message The message to broadcast.
-   */
   invoke(payload: RPCRequest): void {
     if (this.isClosed) return
 
     if (this.isLeader)
       return void this.sendUpstream({ kind: 'invoke', payload })
 
-    return void this.broadcastChannel.postMessage({ kind: 'invoke', payload })
+    return void this.broadcastChannel!.postMessage({ kind: 'invoke', payload })
   }
 
   gossip(topic: Topic, payload: Gossip): void {
@@ -123,7 +121,7 @@ export class OriginSocket<
 
     if (this.isLeader) void this.sendUpstream(ctx)
 
-    return void this.broadcastChannel.postMessage(ctx)
+    return void this.broadcastChannel!.postMessage(ctx)
   }
 
   /**
@@ -165,13 +163,13 @@ export class OriginSocket<
       }
 
       const handleAbort = () => {
-        void this.myTransacts.delete(transactionId)
+        void this.myTransacts!.delete(transactionId)
         signal?.removeEventListener('abort', handleAbort)
 
         reject(abortReason())
       }
 
-      this.myTransacts.set(transactionId, {
+      this.myTransacts!.set(transactionId, {
         resolve,
         reject,
         cleanup: () => {
@@ -198,7 +196,7 @@ export class OriginSocket<
   subscribe(topic: Topic): void {
     if (this.isClosed) return
 
-    void this.myTopics.add(topic)
+    void this.myTopics!.add(topic)
 
     const ctx: Context<Topic> = {
       kind: 'subscribe',
@@ -221,7 +219,7 @@ export class OriginSocket<
   unsubscribe(topic: Topic): void {
     if (this.isClosed) return
 
-    void this.myTopics.delete(topic)
+    void this.myTopics!.delete(topic)
 
     const ctx: Context<Topic> = {
       kind: 'unsubscribe',
@@ -321,15 +319,15 @@ export class OriginSocket<
               if (ctx === undefined || typeof ctx !== 'object') return
 
               if (ctx?.kind === 'transact') {
-                const transaction = this.myTransacts.get(ctx.id)
+                const transaction = this.myTransacts!.get(ctx.id)
 
                 if (transaction) {
-                  void this.myTransacts.delete(ctx.id)
+                  void this.myTransacts!.delete(ctx.id)
                   void transaction.cleanup()
                   void transaction.resolve(ctx.payload as RPCResponse)
                   return
                 }
-                return void this.broadcastChannel.postMessage(
+                return void this.broadcastChannel!.postMessage(
                   ctx as Context<RPCResponse>
                 )
               }
@@ -371,18 +369,27 @@ export class OriginSocket<
    * Closes the client and releases its local and remote resources.
    */
   close(): void {
+    if (this.isClosed) return
     this.isClosed = true
     void self.removeEventListener('online', this.onlineHandler)
 
     try {
-      void this.myTopics.clear()
-      void this.myTransacts.clear()
-      void this.broadcastChannel.close()
+      void this.myTopics!.clear()
+      void this.myTransacts!.clear()
+      void this.broadcastChannel!.close()
+      this.myTopics = null
+      this.myTransacts = null
+      this.broadcastChannel = null
     } catch {}
 
     if (this.isLeader) {
       try {
-        void this.webSocket?.close(1000, 'closed')
+        void this.webSocket!.close(1000, 'closed')
+        void this.upstreamTopics!.clear()
+        this.isLeader = false
+        this.upstreamQueue!.length = 0
+        this.webSocket = null
+        this.upstreamQueue = null
       } catch {}
     }
   }
