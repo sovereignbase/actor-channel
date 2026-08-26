@@ -46,7 +46,7 @@ export class OriginSocket<
   constructor(webSocketUrl: string = '') {
     this.webSocketUrl = webSocketUrl
     this.broadcastChannel = new BroadcastChannel(
-      '@sovereignbase/origin-socket:channel'
+      '@sovereignbase/origin-socket:broadcast-channel'
     )
     this.myTopics = new Set()
     this.myTransacts = new Map()
