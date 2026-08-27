@@ -169,3 +169,8 @@ export type SocketManagerEventListenerFor<
   : EventListenerOrEventListenerObject
 
 export type SocketDetails<Topic extends string> = [WebSocket, Array<Topic>]
+
+export type SocketDummy = {
+  send: (data: ArrayBuffer) => void
+  readyState: number
+}
