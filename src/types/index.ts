@@ -31,20 +31,21 @@ export type Context<T> =
       kind: 'publish'
       topic: string
       from: 'server' | 'client'
-
       detail: T
+      serverOnly?: boolean
     }
   | {
       kind: 'subscribe'
       topic: string
       from: 'server' | 'client'
+      serverOnly?: boolean
     }
   | {
       kind: 'unsubscribe'
       topic: string
       from: 'server' | 'client'
+      serverOnly?: boolean
     }
-
 /**
  * Maps OriginSocket event names to their event detail values.
  *
