@@ -1,47 +1,45 @@
-import type { Context, SocketDetails } from '../types/index.js'
+import type { Context } from '../types/index.js'
 import { decode, encode } from '@msgpack/msgpack'
 
-export class SocketManager<
-  Topic extends string,
-  Gossip,
-  Offer,
-  Answer,
-  RPCRequest,
-  RPCResponse,
-> {
+export class SocketManager<RPCRequest, RPCResponse> {
   private readonly eventTarget: EventTarget = new EventTarget()
-  private readonly subscriptionMap: Map<Topic, Set<WebSocket>> = new Map()
+  ///
+  private readonly syncTopics: Map<string, Set<WebSocket>> = new Map()
+  private readonly peerTopics: Map<string, Set<WebSocket>> = new Map()
+  ///
   private readonly rpcEnabled: Set<WebSocket> = new Set()
-  private readonly relayOnly: Set<WebSocket> = new Set()
+  private readonly allSockets: Set<WebSocket> = new Set()
+  ///
 
   addSocket(
     socket: WebSocket,
     rpcEnabled: boolean = false,
-    subscriptions?: Topic[]
+    subscriptions?: {
+      syncTopics?: Array<string>
+      peerTopics?: Array<string>
+    }
   ): void {
     if (rpcEnabled) void this.rpcEnabled.add(socket)
-    else void this.relayOnly.add(socket)
 
     if (!subscriptions) return
-    for (const topic of subscriptions) {
-      let topicSubscribers = this.subscriptionMap.get(topic)
-      if (!topicSubscribers)
-        void this.subscriptionMap.set(topic, new Set([socket]))
-      else void topicSubscribers.add(socket)
+    if (subscriptions.syncTopics) {
+      for (const topic of subscriptions.syncTopics) {
+        void this.subscribeSyncTopic(socket, topic)
+      }
+    }
+    if (subscriptions.peerTopics) {
+      for (const topic of subscriptions.peerTopics) {
+        void this.subscribePeerTopic(socket, topic)
+      }
     }
     return
   }
 
   handleMessage(sender: WebSocket, message: ArrayBuffer) {
-    if (!(message instanceof ArrayBuffer))
-      return void this.eventTarget.dispatchEvent(
-        new CustomEvent<string>('violation', {
-          detail: 'Wrong message encoding.',
-        })
-      )
     let ctx: Context<unknown>
 
     try {
+      if (!(message instanceof ArrayBuffer)) throw null
       ctx = decode(message) as Context<unknown>
     } catch {
       return void this.eventTarget.dispatchEvent(
@@ -54,27 +52,24 @@ export class SocketManager<
     //////////////
     // REQUEST //
     ////////////
-    if (ctx.kind === 'request') {
-      if (ctx.phase !== 'request')
-        return void this.eventTarget.dispatchEvent(
-          new CustomEvent<string>('violation', { detail: 'Off protocol.' })
-        )
+    if (ctx?.kind === 'request') {
       if (!this.rpcEnabled.has(sender))
         return void this.eventTarget.dispatchEvent(
           new CustomEvent<string>('violation', { detail: 'Unauthorized.' })
         )
       return void this.eventTarget.dispatchEvent(
         new CustomEvent<
-          [request: RPCRequest, resolve: (reponse: RPCResponse) => void]
+          [request: RPCRequest, resolve: (response?: RPCResponse) => void]
         >('request', {
           detail: [
             ctx.detail as RPCRequest,
-            (response: RPCResponse) => {
+            (detail?: RPCResponse) => {
+              if (!sender || sender.CLOSED) return
               void sender.send(
                 encode<Context<RPCResponse>>({
-                  kind: 'resolve',
+                  kind: 'response',
                   id: ctx.id,
-                  detail: response,
+                  detail,
                 }).buffer
               )
             },
@@ -83,37 +78,108 @@ export class SocketManager<
       )
     }
 
-    /////////////
-    // INVOKE //
-    ///////////
+    //////////////
+    // PUBLISH //
+    ////////////
 
-    if (ctx.kind === 'request') {
-      if (ctx.phase !== 'request')
-        return void this.eventTarget.dispatchEvent(
-          new CustomEvent<string>('violation', { detail: 'Off protocol.' })
+    if (ctx?.kind === 'publish') {
+      if (ctx.peerOnly) {
+        const topicSubscribers = this.peerTopics.get(ctx.topic)
+        if (!topicSubscribers) return
+        for (const socket of topicSubscribers.values()) {
+          void socket.send(
+            encode<Context<unknown>>({
+              kind: 'publish',
+              topic: ctx.topic,
+              from: 'server',
+              detail: ctx.detail,
+              peerOnly: true,
+            }).buffer
+          )
+        }
+        return
+      }
+
+      const topicSubscribers = this.syncTopics.get(ctx.topic)
+      if (!topicSubscribers) return
+      for (const socket of topicSubscribers.values()) {
+        void socket.send(
+          encode<Context<unknown>>({
+            kind: 'publish',
+            topic: ctx.topic,
+            from: 'server',
+            detail: ctx.detail,
+          }).buffer
         )
-      if (!this.rpcEnabled.has(sender))
-        return void this.eventTarget.dispatchEvent(
-          new CustomEvent<string>('violation', { detail: 'Unauthorized.' })
-        )
-      return void this.eventTarget.dispatchEvent(
-        new CustomEvent<
-          [request: RPCRequest, resolve: (reponse: RPCResponse) => void]
-        >('request', {
-          detail: [
-            ctx.detail as RPCRequest,
-            (response: RPCResponse) => {
-              void sender.send(
-                encode<Context<RPCResponse>>({
-                  kind: 'resolve',
-                  id: ctx.id,
-                  detail: response,
-                }).buffer
-              )
-            },
-          ],
-        })
-      )
+      }
+      return
     }
+
+    ////////////////
+    // SUBSCRIBE //
+    //////////////
+
+    if (ctx?.kind === 'subscribe') {
+      if (ctx.peerOnly) {
+        void this.subscribePeerTopic(sender, ctx.topic)
+        const topicSubscribers = this.peerTopics.get(ctx.topic)
+        for (const socket of topicSubscribers.values()) {
+          void socket.send(
+            encode<Context<unknown>>({
+              kind: 'subscribe',
+              topic: ctx.topic,
+              from: 'server',
+              peerOnly: true,
+            }).buffer
+          )
+        }
+        return
+      }
+
+      const topicSubscribers = this.syncTopics.get(ctx.topic)
+      if (!topicSubscribers) return
+      for (const socket of topicSubscribers.values()) {
+        void socket.send(
+          encode<Context<unknown>>({
+            kind: 'publish',
+            topic: ctx.topic,
+            from: 'server',
+          }).buffer
+        )
+      }
+      return
+    }
+
+    return
+  }
+
+  //    //  //////  //      ////    //////  ////      /////
+  //    //  //      //      //  //  //      //  //  ///
+  ////////  //////  //      ////    //////  ////      ///
+  //    //  //      //      //      //      //  //      ///
+  //    //  //////  //////  //      //////  //  //  /////
+
+  private subscribeSyncTopic(subscriber: WebSocket, topic: string): void {
+    const topicSubscribers = this.syncTopics.get(topic)
+    if (!topicSubscribers)
+      void this.syncTopics.set(topic, new Set([subscriber]))
+    else void topicSubscribers.add(subscriber)
+  }
+  private unsubscribeSyncTopic(subscriber: WebSocket, topic: string): void {
+    const topicSubscribers = this.syncTopics.get(topic)
+    if (!topicSubscribers) return
+    else void topicSubscribers.delete(subscriber)
+  }
+
+  private subscribePeerTopic(subscriber: WebSocket, topic: string): void {
+    const topicSubscribers = this.peerTopics.get(topic)
+    if (!topicSubscribers)
+      void this.peerTopics.set(topic, new Set([subscriber]))
+    else void topicSubscribers.add(subscriber)
+  }
+  private unsubscribePeerTopic(subscriber: WebSocket, topic: string): void {
+    const topicSubscribers = this.peerTopics.get(topic)
+    if (!topicSubscribers) return
+    else void topicSubscribers.delete(subscriber)
   }
 }

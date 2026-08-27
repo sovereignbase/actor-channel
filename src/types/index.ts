@@ -16,13 +16,9 @@ export type Context<T> =
       detail: T
     }
   | {
-      kind: 'abort'
-      id: string
-    }
-  | {
       kind: 'response'
       id: string
-      detail: T
+      detail?: T
     }
   //////////////
   // PUB/SUB //
@@ -32,19 +28,19 @@ export type Context<T> =
       topic: string
       from: 'server' | 'client'
       detail: T
-      serverOnly?: boolean
+      peerOnly?: boolean
     }
   | {
       kind: 'subscribe'
       topic: string
       from: 'server' | 'client'
-      serverOnly?: boolean
+      peerOnly?: boolean
     }
   | {
       kind: 'unsubscribe'
       topic: string
       from: 'server' | 'client'
-      serverOnly?: boolean
+      peerOnly?: boolean
     }
 /**
  * Maps OriginSocket event names to their event detail values.
