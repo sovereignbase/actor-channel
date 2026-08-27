@@ -1,16 +1,11 @@
 import { encode, decode } from '@msgpack/msgpack'
-import {
+import type {
   Context,
   OriginSocketEventMap,
   OriginSocketEventListenerFor,
   RequestPromise,
+  ChannelMessage,
 } from './types/index.js'
-
-type ChannelMessage<T> =
-  | Context<T>
-  | { kind: 'online'; id: string }
-  | { kind: 'offline'; id: string | null }
-  | { kind: 'status' }
 
 /**
  * Shares one upstream WebSocket connection between same-origin browser
@@ -54,7 +49,7 @@ export class OriginSocket<
 
   // Replicated topics ordered by local instances.
   private originTopics: Map<Topic, number> | null = null
-  // A best effort offline queue mainly to allow calls before websocket is ready
+  // A best effort disconnected queue mainly to allow calls before websocket is ready
   private upstreamQueue: Array<
     Context<RPCRequest | RPCResponse | Gossip | Offer | Topic>
   > | null = null
@@ -99,20 +94,20 @@ export class OriginSocket<
       if (ctx.kind === 'status') {
         if (this.isLeader && this.isOnline)
           void this.broadcastChannel!.postMessage({
-            kind: 'online',
+            kind: 'connected',
             id: this.connectionId!,
           })
         return
       }
-      if (ctx.kind === 'online') {
+      if (ctx.kind === 'connected') {
         this.connectionId = ctx.id
         if (!this.isOnline) {
           this.isOnline = true
-          void this.eventTarget.dispatchEvent(new CustomEvent('online'))
+          void this.eventTarget.dispatchEvent(new CustomEvent('connected'))
         }
         return
       }
-      if (ctx.kind === 'offline') {
+      if (ctx.kind === 'disconnected') {
         if (ctx.id !== this.connectionId) return
         if (!this.isOnline) return
         this.isOnline = false
@@ -126,7 +121,7 @@ export class OriginSocket<
           void request.reject(reason)
         }
         void this.myRequests!.clear()
-        void this.eventTarget.dispatchEvent(new CustomEvent('offline'))
+        void this.eventTarget.dispatchEvent(new CustomEvent('disconnected'))
         return
       }
 
@@ -211,7 +206,7 @@ export class OriginSocket<
 
     if (this.webSocketUrl && navigator.onLine) void this.upstreamConnect()
     if (this.webSocketUrl) {
-      void self.addEventListener('online', this.onlineHandler)
+      void self.addEventListener('connected', this.onlineHandler)
     }
   }
 
@@ -302,7 +297,7 @@ export class OriginSocket<
    * @param detail - Request detail.
    * @param signal - Optional signal used to abort the request.
    * @returns The response detail, or `false` when the operation cannot be sent
-   *   because the instance is closed or the shared connection is offline.
+   *   because the instance is closed or the shared connection is disconnected.
    * @throws The abort reason when `signal` is aborted.
    * @throws A `DOMException` named `NetworkError` if the connection is lost.
    */
@@ -368,7 +363,7 @@ export class OriginSocket<
    *
    * @param topic - Topic to subscribe to.
    * @returns `true` when a new subscription was accepted while online, or
-   *   `false` when closed, offline, or already subscribed.
+   *   `false` when closed, disconnected, or already subscribed.
    */
   subscribe(topic: Topic): boolean {
     if (this.isClosed || !this.isOnline) return false
@@ -394,7 +389,7 @@ export class OriginSocket<
    *
    * @param topic - Topic to unsubscribe from.
    * @returns `true` when the subscription existed and the shared connection was
-   *   online. Returns `false` when closed, not subscribed, or offline.
+   *   online. Returns `false` when closed, not subscribed, or disconnected.
    */
   unsubscribe(topic: Topic): boolean {
     if (this.isClosed) return false
@@ -488,10 +483,12 @@ export class OriginSocket<
                 void request.reject(reason)
               }
               void this.myRequests!.clear()
-              void this.eventTarget.dispatchEvent(new CustomEvent('offline'))
+              void this.eventTarget.dispatchEvent(
+                new CustomEvent('disconnected')
+              )
             }
             void this.broadcastChannel!.postMessage({
-              kind: 'offline',
+              kind: 'disconnected',
               id: previousConnectionId,
             })
 
@@ -611,10 +608,12 @@ export class OriginSocket<
                   void request.reject(reason)
                 }
                 void this.myRequests!.clear()
-                void this.eventTarget.dispatchEvent(new CustomEvent('offline'))
+                void this.eventTarget.dispatchEvent(
+                  new CustomEvent('disconnected')
+                )
               }
               void this.broadcastChannel?.postMessage({
-                kind: 'offline',
+                kind: 'disconnected',
                 id: connectionId,
               })
               this.isLeader = false
@@ -650,7 +649,7 @@ export class OriginSocket<
 
     if (this.isLeader && this.isOnline)
       void this.broadcastChannel!.postMessage({
-        kind: 'offline',
+        kind: 'disconnected',
         id: this.connectionId,
       })
 

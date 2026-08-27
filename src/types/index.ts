@@ -7,35 +7,32 @@
  * @typeParam T - Detail type carried by the context.
  */
 export type Context<T> =
-  | {
-      kind: 'invoke'
-      detail: T
-    }
-  | {
-      kind: 'offer'
-      id: string
-      detail: T
-    }
-  | {
-      kind: 'withdraw'
-      id: string
-    }
-  | {
-      kind: 'answer'
-      id: string
-      detail: T
-    }
-  | {
-      kind: 'gossip'
-      topic: string
-      detail: T
-      from: 'server' | 'client'
-    }
+  //////////////
+  // REQ/RES //
+  ////////////
   | {
       kind: 'request'
       id: string
       detail: T
-      phase: 'request' | 'response'
+    }
+  | {
+      kind: 'abort'
+      id: string
+    }
+  | {
+      kind: 'response'
+      id: string
+      detail: T
+    }
+  //////////////
+  // PUB/SUB //
+  ////////////
+  | {
+      kind: 'publish'
+      topic: string
+      from: 'server' | 'client'
+
+      detail: T
     }
   | {
       kind: 'subscribe'
@@ -51,7 +48,7 @@ export type Context<T> =
 /**
  * Maps OriginSocket event names to their event detail values.
  *
- * `online` and `offline` describe the shared upstream connection. `gossip` and
+ * `connected` and `diconnected` describe the shared upstream connection. `gossip` and
  * `answer` carry their respective details in `CustomEvent.detail`.
  *
  * @typeParam Gossip - Detail emitted by `gossip` events.
@@ -115,3 +112,63 @@ export type RequestPromise<T> = {
   /** Removes resources such as abort listeners. */
   cleanup: () => void
 }
+
+export type ChannelMessage<T> =
+  | Context<T>
+  | { kind: 'connected'; id: string }
+  | { kind: 'disconnected'; id: string | null }
+  | { kind: 'status' }
+
+/**
+ * Maps SocketManager event names to their event detail values.
+ *
+ * `connected` and `disconnected` describe the shared upstream connection. `gossip` and
+ * `answer` carry their respective details in `CustomEvent.detail`.
+ *
+ * @typeParam Gossip - Detail emitted by `gossip` events.
+ * @typeParam Answer - Detail emitted by `answer` events.
+ */
+export type SocketManagerEventMap<Request, Offer> = {
+  /** A detail received for a locally subscribed topic. */
+  violation: string
+  /** A response to an offer created by this instance. */
+  request: Request
+  /** The shared upstream connection became available. */
+  offer: Offer
+}
+
+/**
+ * Represents a strongly typed SocketManager event listener.
+ *
+ * @typeParam Gossip - Gossip event detail type.
+ * @typeParam Answer - Answer event detail type.
+ * @typeParam K - Event name.
+ */
+export type SocketManagerEventListener<
+  Gossip,
+  Answer,
+  K extends keyof SocketManagerEventMap<Gossip, Answer>,
+> =
+  | ((event: CustomEvent<SocketManagerEventMap<Gossip, Answer>[K]>) => void)
+  | {
+      handleEvent(
+        event: CustomEvent<SocketManagerEventMap<Gossip, Answer>[K]>
+      ): void
+    }
+
+/**
+ * Resolves an event name to its corresponding listener type.
+ *
+ * @typeParam Gossip - Gossip event detail type.
+ * @typeParam Answer - Answer event detail type.
+ * @typeParam K - Event name.
+ */
+export type SocketManagerEventListenerFor<
+  Gossip,
+  Answer,
+  K extends string,
+> = K extends keyof SocketManagerEventMap<Gossip, Answer>
+  ? SocketManagerEventListener<Gossip, Answer, K>
+  : EventListenerOrEventListenerObject
+
+export type SocketDetails<Topic extends string> = [WebSocket, Array<Topic>]
