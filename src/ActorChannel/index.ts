@@ -33,6 +33,7 @@ export class ActorChannel<
 
   request(detail: RPCRequest): string {
     const id = crypto.randomUUID()
+    void this.myRequests.add(id)
     const ctx: Context<Topic, Message, RPCRequest, RPCResponse> = {
       kind: 'request',
       id,
@@ -133,26 +134,24 @@ export class ActorChannel<
   async addBroker(
     brokerUrl: string,
     rpcEnabled: boolean = false
-  ): Promise<boolean> {
-    if (typeof brokerUrl !== 'string' || !self.navigator.locks) return false
-
-    let connected: boolean = false
+  ): Promise<void> {
+    if (typeof brokerUrl !== 'string' || !self.navigator.locks) return
 
     try {
-      while (!connected) {
-        void (await self.navigator.locks.request(
+      while (true) {
+        await self.navigator.locks.request(
           `@sovereignbase/actor-channel:web-lock:${brokerUrl}`,
           { ifAvailable: true },
           async (lockHandle) => {
             // Some channel already has a connection to the broker.
-            if (!lockHandle) return true
+            if (!lockHandle) return
 
             let socket: WebSocket
 
             try {
               socket = new WebSocket(brokerUrl)
             } catch {
-              return false
+              return
             }
 
             socket.binaryType = 'arraybuffer'
@@ -213,16 +212,27 @@ export class ActorChannel<
               }
               return
             }
-            connected = true
+            await new Promise<void>((resolve) => {
+              void socket.addEventListener('close', () => resolve(), {
+                once: true,
+              })
+            })
+
+            void this.allBrokers.delete(socket)
+            void this.rpcEnabled.delete(socket)
+
+            for (const sockets of this.brokerTopics.values()) {
+              void sockets.delete(socket)
+            }
+            return
           }
-        ))
+        )
 
         await new Promise<void>((resolve) => setTimeout(resolve, 10_000))
       }
     } catch {
-      return false
+      return
     }
-    return connected
   }
 
   //    //  //////  //      ////    //////  ////      /////
