@@ -3,8 +3,14 @@
   "license": "Apache-2.0",
   "name": "@sovereignbase/actor-channel",
   "version": "0.0.0",
-  "description": "",
+  "description": "Bidirectional actor channels with pub/sub, peer relaying, and RPC.",
   "keywords": [
+    "actor-model",
+    "rpc",
+    "websocket",
+    "pubsub",
+    "realtime",
+    "message-broker",
     "typescript",
     "sovereignbase"
   ],
