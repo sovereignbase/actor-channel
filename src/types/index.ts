@@ -1,36 +1,36 @@
-export type Context<T> =
+export type Context<Topic, Message, RPCRequest, RPCResponse> =
   //////////////
   // REQ/RES //
   ////////////
   | {
       kind: 'request'
       id: string
-      detail: T
+      detail: RPCRequest
     }
   | {
       kind: 'response'
       id: string
-      detail?: T
+      detail?: RPCResponse
     }
   //////////////
   // PUB/SUB //
   ////////////
   | {
       kind: 'publish'
-      topic: string
+      topic: Topic
       from: 'server' | 'client'
-      detail: T
+      detail: Message
       peerOnly?: boolean
     }
   | {
       kind: 'subscribe'
-      topic: string
+      topic: Topic
       from: 'server' | 'client'
       peerOnly?: boolean
     }
   | {
       kind: 'unsubscribe'
-      topic: string
+      topic: Topic
       from: 'server' | 'client'
       peerOnly?: boolean
     }

@@ -30,8 +30,7 @@ export default defineConfig({
   banner: {
     js: `${apache2Banner}\n`,
   },
-  external: [],
-  outExtension({ format }) {
+  outExtensions({ format }) {
     return { js: format === 'cjs' ? '.cjs' : '.js' }
   },
 })

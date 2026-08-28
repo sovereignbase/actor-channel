@@ -5,7 +5,12 @@ import type {
 } from '../types/index.js'
 import { decode, encode } from '@msgpack/msgpack'
 
-export class ChannelBroker<RPCRequest, RPCResponse> {
+export class ChannelBroker<
+  Topic extends string,
+  Message,
+  RPCRequest,
+  RPCResponse,
+> {
   private readonly eventTarget: EventTarget = new EventTarget()
   ///
   private readonly syncTopics: Map<string, Set<ActorChannelPair>> = new Map()
@@ -39,11 +44,11 @@ export class ChannelBroker<RPCRequest, RPCResponse> {
   }
 
   handleMessage(sender: ActorChannelPair, message: ArrayBuffer) {
-    let ctx: Context<unknown>
+    let ctx: Context<Topic, Message, RPCRequest, RPCResponse>
 
     try {
       if (!(message instanceof ArrayBuffer)) throw null
-      ctx = decode(message) as Context<unknown>
+      ctx = decode(message) as Context<Topic, Message, RPCRequest, RPCResponse>
     } catch {
       return void this.dispatchEvent('violation', 'Wrong message encoding.')
     }
@@ -63,7 +68,7 @@ export class ChannelBroker<RPCRequest, RPCResponse> {
         (detail?: RPCResponse) => {
           if (!sender || sender?.readyState !== WebSocket.OPEN) return
           void sender.send(
-            encode<Context<RPCResponse>>({
+            encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
               kind: 'response',
               id: ctx.id,
               detail,
@@ -81,13 +86,15 @@ export class ChannelBroker<RPCRequest, RPCResponse> {
       if (ctx.peerOnly) {
         const topicSubscribers = this.peerTopics.get(ctx.topic)
         if (!topicSubscribers) return
-        const buffer = encode<Context<unknown>>({
-          kind: 'publish',
-          topic: ctx.topic,
-          from: 'server',
-          detail: ctx.detail,
-          peerOnly: true,
-        }).buffer
+        const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>(
+          {
+            kind: 'publish',
+            topic: ctx.topic,
+            from: 'server',
+            detail: ctx.detail,
+            peerOnly: true,
+          }
+        ).buffer
         for (const channel of topicSubscribers.values()) {
           void channel.send(buffer)
         }
@@ -96,7 +103,7 @@ export class ChannelBroker<RPCRequest, RPCResponse> {
 
       const topicSubscribers = this.syncTopics.get(ctx.topic)
       if (!topicSubscribers) return
-      const buffer = encode<Context<unknown>>({
+      const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
         kind: 'publish',
         topic: ctx.topic,
         from: 'server',
@@ -116,12 +123,14 @@ export class ChannelBroker<RPCRequest, RPCResponse> {
       if (ctx.peerOnly) {
         void this.subscribePeerTopic(sender, ctx.topic)
         const topicSubscribers = this.peerTopics.get(ctx.topic)!
-        const buffer = encode<Context<unknown>>({
-          kind: 'subscribe',
-          topic: ctx.topic,
-          from: 'server',
-          peerOnly: true,
-        }).buffer
+        const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>(
+          {
+            kind: 'subscribe',
+            topic: ctx.topic,
+            from: 'server',
+            peerOnly: true,
+          }
+        ).buffer
         for (const channel of topicSubscribers.values()) {
           void channel.send(buffer)
         }
@@ -129,7 +138,7 @@ export class ChannelBroker<RPCRequest, RPCResponse> {
       }
       void this.subscribeSyncTopic(sender, ctx.topic)
       const topicSubscribers = this.syncTopics.get(ctx.topic)!
-      const buffer = encode<Context<unknown>>({
+      const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
         kind: 'subscribe',
         topic: ctx.topic,
         from: 'server',
@@ -148,12 +157,14 @@ export class ChannelBroker<RPCRequest, RPCResponse> {
       if (ctx.peerOnly) {
         const topicSubscribers = this.peerTopics.get(ctx.topic)
         if (!topicSubscribers) return
-        const buffer = encode<Context<unknown>>({
-          kind: 'unsubscribe',
-          topic: ctx.topic,
-          from: 'server',
-          peerOnly: true,
-        }).buffer
+        const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>(
+          {
+            kind: 'unsubscribe',
+            topic: ctx.topic,
+            from: 'server',
+            peerOnly: true,
+          }
+        ).buffer
         for (const channel of topicSubscribers.values()) {
           void channel.send(buffer)
         }
@@ -161,7 +172,7 @@ export class ChannelBroker<RPCRequest, RPCResponse> {
       }
       const topicSubscribers = this.syncTopics.get(ctx.topic)
       if (!topicSubscribers) return
-      const buffer = encode<Context<unknown>>({
+      const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
         kind: 'unsubscribe',
         topic: ctx.topic,
         from: 'server',

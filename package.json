@@ -35,9 +35,7 @@
     "typecheck": "tsc --noEmit --project test/tsconfig.json",
     "test:vitest": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "bench": "npm run build && node benchmark/bench.js",
-    "prepare": "husky",
-    "prepublishOnly": "npm run test && npm run bench"
+    "prepare": "husky"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.2",
