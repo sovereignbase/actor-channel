@@ -213,8 +213,7 @@ export class ActorChannel<
               }
               return
             }
-
-            return true
+            connected = true
           }
         ))
 
