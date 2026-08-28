@@ -113,20 +113,20 @@ export class ActorChannel<
       }
     }
 
-    window.addEventListener('pagehide', () => {
-      fanoutTopics('unsubscribe')
+    void window.addEventListener('pagehide', () => {
+      void fanoutTopics('unsubscribe')
       const diff = -this.rpcOnline.size
       void this.rpcOnline.clear()
-      if (diff) this.rpcFanout(diff)
+      if (diff) void this.rpcFanout(diff)
     })
     window.addEventListener('pageshow', (event) => {
       if (!event.persisted) return
-      fanoutTopics('subscribe')
+      void fanoutTopics('subscribe')
       for (const socket of this.rpcEnabled) {
         if (socket.readyState !== WebSocket.OPEN || this.rpcOnline.has(socket))
           continue
         void this.rpcOnline.add(socket)
-        this.rpcFanout(1)
+        void this.rpcFanout(1)
       }
     })
 
@@ -207,7 +207,7 @@ export class ActorChannel<
             void socket.addEventListener('open', () => {
               if (rpcEnabled) {
                 void this.rpcOnline.add(socket)
-                this.rpcFanout(1)
+                void this.rpcFanout(1)
               }
               for (const topic of this.channelTopic.keys()) {
                 void socket.send(
@@ -280,7 +280,7 @@ export class ActorChannel<
               })
             })
 
-            if (this.rpcOnline.delete(socket)) this.rpcFanout(-1)
+            if (this.rpcOnline.delete(socket)) void this.rpcFanout(-1)
 
             void this.allBrokers.delete(socket)
             void this.rpcEnabled.delete(socket)
