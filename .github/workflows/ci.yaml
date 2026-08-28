@@ -66,6 +66,10 @@ jobs:
           node-version: '24'
           cache: npm
 
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: denoland/setup-deno@v2
+
       - run: npm ci
 
       - name: Install Playwright browsers
