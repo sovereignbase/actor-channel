@@ -22,7 +22,7 @@ export class ActorChannel<
   private readonly rpcEnabled: Set<WebSocket> = new Set()
   private readonly rpcOnline: Set<WebSocket> = new Set()
   //
-  private readonly brokerTopics: Map<Topic, Set<WebSocket>> = new Map()
+  private readonly brokerTopics: Map<WebSocket, Map<Topic, number>> = new Map()
   private readonly channelTopic: Map<Topic, number> = new Map()
   //
   private readonly myRequests: Set<string> = new Set()
@@ -257,20 +257,30 @@ export class ActorChannel<
               //  SUBSCRIBE //
               ///////////////
               if (ctx.kind === 'subscribe' && ctx.from === 'server') {
-                const topicSubscribers = this.brokerTopics.get(ctx.topic)
-                if (!topicSubscribers)
+                const topics = this.brokerTopics.get(socket)
+                if (!topics)
                   return void this.brokerTopics.set(
-                    ctx.topic,
-                    new Set([socket])
+                    socket,
+                    new Map([[ctx.topic, 1]])
                   )
-                return void topicSubscribers.add(socket)
+                return void topics.set(
+                  ctx.topic,
+                  (topics.get(ctx.topic) ?? 0) + 1
+                )
               }
 
               ///////////////////
               //  UNSUBSCRIBE //
               /////////////////
               if (ctx.kind === 'unsubscribe' && ctx.from === 'server') {
-                return void this.brokerTopics.get(ctx.topic)?.delete(socket)
+                const topics = this.brokerTopics.get(socket)
+                const subscriberCount = topics?.get(ctx.topic)
+                if (!topics || !subscriberCount) return
+                if (subscriberCount > 1)
+                  return void topics.set(ctx.topic, subscriberCount - 1)
+                void topics.delete(ctx.topic)
+                if (topics.size < 1) void this.brokerTopics.delete(socket)
+                return
               }
               return
             }
@@ -285,9 +295,7 @@ export class ActorChannel<
             void this.allBrokers.delete(socket)
             void this.rpcEnabled.delete(socket)
 
-            for (const sockets of this.brokerTopics.values()) {
-              void sockets.delete(socket)
-            }
+            void this.brokerTopics.delete(socket)
             return
           }
         )
@@ -320,11 +328,10 @@ export class ActorChannel<
     ctx: Context<Topic, Message, RPCRequest, RPCResponse>
   ): void {
     if (ctx.kind !== 'publish') return
-    const topicSubscribers = this.brokerTopics.get(ctx.topic)
-    if (!topicSubscribers || topicSubscribers.size < 1) return
     const buffer = encode<typeof ctx>(ctx).buffer
-    for (const socket of topicSubscribers.values())
-      if (socket.readyState === WebSocket.OPEN) void socket.send(buffer)
+    for (const [socket, topics] of this.brokerTopics)
+      if (topics.has(ctx.topic) && socket.readyState === WebSocket.OPEN)
+        void socket.send(buffer)
     return
   }
   private subscribeFanout(
