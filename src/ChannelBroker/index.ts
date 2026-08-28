@@ -44,6 +44,21 @@ export class ChannelBroker<
     return
   }
 
+  deleteChannel(channel: ActorChannelPair): void {
+    void this.rpcEnabled.delete(channel)
+
+    for (const [topic, subscribers] of this.syncTopics) {
+      void subscribers.delete(channel)
+      if (subscribers.size < 1) void this.syncTopics.delete(topic)
+    }
+
+    for (const [topic, subscribers] of this.peerTopics) {
+      void subscribers.delete(channel)
+      if (subscribers.size < 1) void this.peerTopics.delete(topic)
+    }
+    return
+  }
+
   handleMessage(sender: ActorChannelPair, message: ArrayBuffer) {
     let ctx: Context<Topic, Message, RPCRequest, RPCResponse>
 

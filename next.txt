@@ -1,8 +1,6 @@
 Brokerin unsubscribe lähetetään edelleen kaikille tilaajille.
 [`ChannelBroker`](C:\\Users\\jorts\\actor-socket\\src\\ChannelBroker\\index.ts) lähettää unsubscribe-viestin koko topic-setille. Jokainen vastaanottava ActorChannel poistaa oman broker-socketinsa topicilta, vaikka vain yksi asiakas poistui.
 
-ChannelBroker ei pysty poistamaan suljettua channelia.
-Sillä on addChannel(), mutta ei vastaparia. Suljetut yhteydet jäävät rpcEnabled-, syncTopics- ja peerTopics-rakenteisiin. Myöskään tyhjiä topic-settejä ei poisteta.
 
 Myöhemmin avattu tabi voi saada negatiivisen rpcBrokers-arvon.
 Se ei näe ennen avaamistaan lähetettyä +1:tä, mutta voi myöhemmin vastaanottaa saman socketin -1:n. Tämän jälkeen seuraava +1 nostaa arvon vain nollaan ja rpcAvailable pysyy virheellisesti epätotena. Nykyinen best-effort-malli tarvitsee vähintään nollaan rajaamisen tai tilannekyselyn.
