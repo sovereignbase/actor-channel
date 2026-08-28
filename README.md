@@ -120,8 +120,8 @@ The transport passed to `ChannelBroker` must expose `send(ArrayBuffer)` and
 - Topic subscriptions are forwarded to brokers on the first local subscription
   and removed after the final local unsubscription.
 - Requests are not queued or replayed when no RPC-enabled connection is open.
-- `rpcAvailable` is a best-effort availability signal, not a server
-  acknowledgement.
+- `rpcAvailable` is `true` when the channel knows of at least one open
+  RPC-enabled broker WebSocket.
 - Protocol messages are MessagePack-encoded `ArrayBuffer` values.
 - `ChannelBroker` uses standard web platform primitives and does not require a
   specific server framework.
