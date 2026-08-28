@@ -19,7 +19,9 @@ export class ActorChannel<
   //
   private readonly allBrokers: Set<WebSocket> = new Set()
   private readonly rpcEnabled: Set<WebSocket> = new Set()
+  //
   private readonly brokerTopics: Map<Topic, Set<WebSocket>> = new Map()
+  private readonly channelTopic: Map<Topic, number> = new Map()
   //
   private readonly myRequests: Set<string> = new Set()
   private readonly myTopics: Set<Topic> = new Set()
@@ -158,6 +160,18 @@ export class ActorChannel<
             void this.allBrokers.add(socket)
             if (rpcEnabled) void this.rpcEnabled.add(socket)
 
+            void socket.addEventListener('open', () => {
+              for (const topic of this.channelTopic.keys()) {
+                void socket.send(
+                  encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
+                    kind: 'subscribe',
+                    topic,
+                    from: 'client',
+                  }).buffer
+                )
+              }
+            })
+
             socket.onmessage = (event: MessageEvent<ArrayBuffer>) => {
               let ctx: Context<Topic, Message, RPCRequest, RPCResponse>
               try {
@@ -262,6 +276,20 @@ export class ActorChannel<
     ctx: Context<Topic, Message, RPCRequest, RPCResponse>
   ): void {
     if (ctx.kind !== 'subscribe' && ctx.kind !== 'unsubscribe') return
+
+    const subscriberCount = this.channelTopic.get(ctx.topic) ?? 0
+    if (ctx.kind === 'subscribe') {
+      void this.channelTopic.set(ctx.topic, subscriberCount + 1)
+      if (subscriberCount > 0) return
+    } else {
+      if (subscriberCount < 1) return
+      if (subscriberCount > 1) {
+        void this.channelTopic.set(ctx.topic, subscriberCount - 1)
+        return
+      }
+      void this.channelTopic.delete(ctx.topic)
+    }
+
     if (this.allBrokers.size < 1) return
 
     const buffer = encode<typeof ctx>(ctx).buffer
