@@ -1,10 +1,10 @@
-[![npm version](https://img.shields.io/npm/v/@sovereignbase/actor-socket)](https://www.npmjs.com/package/@sovereignbase/actor-socket)
-[![JSR](https://jsr.io/badges/@sovereignbase/actor-socket)](https://jsr.io/@sovereignbase/actor-socket)
-[![CI](https://github.com/sovereignbase/actor-socket/actions/workflows/ci.yaml/badge.svg?branch=master)](https://github.com/sovereignbase/actor-socket/actions/workflows/ci.yaml)
-[![codecov](https://codecov.io/gh/sovereignbase/actor-socket/branch/master/graph/badge.svg)](https://codecov.io/gh/sovereignbase/actor-socket)
-[![license](https://img.shields.io/npm/l/@sovereignbase/actor-socket)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/@sovereignbase/actor-channel)](https://www.npmjs.com/package/@sovereignbase/actor-channel)
+[![JSR](https://jsr.io/badges/@sovereignbase/actor-channel)](https://jsr.io/@sovereignbase/actor-channel)
+[![CI](https://github.com/sovereignbase/actor-channel/actions/workflows/ci.yaml/badge.svg?branch=master)](https://github.com/sovereignbase/actor-channel/actions/workflows/ci.yaml)
+[![codecov](https://codecov.io/gh/sovereignbase/actor-channel/branch/master/graph/badge.svg)](https://codecov.io/gh/sovereignbase/actor-channel)
+[![license](https://img.shields.io/npm/l/@sovereignbase/actor-channel)](LICENSE)
 
-# actor-socket
+# actor-channel
 
 Client ▣ ActorChannel ⇄ ChannelBroker ☷ Server
 

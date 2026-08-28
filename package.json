@@ -1,7 +1,7 @@
 {
   "type": "module",
   "license": "Apache-2.0",
-  "name": "@sovereignbase/actor-socket",
+  "name": "@sovereignbase/actor-channel",
   "version": "0.0.0",
   "description": "",
   "keywords": [
@@ -43,7 +43,7 @@
     "@commitlint/cli": "^21.2.2",
     "@commitlint/config-conventional": "^21.2.2",
     "@playwright/test": "^1.62.1",
-    "@types/node": "^26.3.0",
+    "@types/node": "^26.4.0",
     "@vitest/coverage-v8": "^4.1.10",
     "husky": "^9.1.7",
     "playwright": "^1.62.1",
@@ -55,12 +55,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sovereignbase/actor-socket.git"
+    "url": "git+https://github.com/sovereignbase/actor-channel.git"
   },
   "bugs": {
-    "url": "https://github.com/sovereignbase/actor-socket/issues"
+    "url": "https://github.com/sovereignbase/actor-channel/issues"
   },
-  "homepage": "https://sovereignbase.dev/actor-socket",
+  "homepage": "https://sovereignbase.dev/actor-channel",
   "dependencies": {
     "@msgpack/msgpack": "^3.1.3"
   }
