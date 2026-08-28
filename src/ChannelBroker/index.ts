@@ -70,7 +70,7 @@ export class ChannelBroker<
    * @param sender - The channel that sent the message.
    * @param message - The MessagePack-encoded protocol message.
    */
-  handleMessage(sender: ActorChannelPair, message: ArrayBuffer) {
+  handleMessage(sender: ActorChannelPair, message: ArrayBuffer): void {
     let ctx: Context<Topic, Message, RPCRequest, RPCResponse>
 
     try {
