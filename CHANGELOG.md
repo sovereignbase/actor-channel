@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/sovereignbase/actor-channel/compare/v1.0.0...v1.0.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* declare broker message return type ([9a0fb45](https://github.com/sovereignbase/actor-channel/commit/9a0fb4580261999ff1bc1a106204b3b68cc10971))
+
 ## 1.0.0 (2026-08-28)
 
 
