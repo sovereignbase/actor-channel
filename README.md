@@ -1,10 +1,10 @@
-[![npm version](https://img.shields.io/npm/v/@sovereignbase/user-socket)](https://www.npmjs.com/package/@sovereignbase/user-socket)
-[![JSR](https://jsr.io/badges/@sovereignbase/user-socket)](https://jsr.io/@sovereignbase/user-socket)
-[![CI](https://github.com/sovereignbase/user-socket/actions/workflows/ci.yaml/badge.svg?branch=master)](https://github.com/sovereignbase/user-socket/actions/workflows/ci.yaml)
-[![codecov](https://codecov.io/gh/sovereignbase/user-socket/branch/master/graph/badge.svg)](https://codecov.io/gh/sovereignbase/user-socket)
-[![license](https://img.shields.io/npm/l/@sovereignbase/user-socket)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/@sovereignbase/actor-socket)](https://www.npmjs.com/package/@sovereignbase/actor-socket)
+[![JSR](https://jsr.io/badges/@sovereignbase/actor-socket)](https://jsr.io/@sovereignbase/actor-socket)
+[![CI](https://github.com/sovereignbase/actor-socket/actions/workflows/ci.yaml/badge.svg?branch=master)](https://github.com/sovereignbase/actor-socket/actions/workflows/ci.yaml)
+[![codecov](https://codecov.io/gh/sovereignbase/actor-socket/branch/master/graph/badge.svg)](https://codecov.io/gh/sovereignbase/actor-socket)
+[![license](https://img.shields.io/npm/l/@sovereignbase/actor-socket)](LICENSE)
 
-# user-socket
+# actor-socket
 
 ## Installation
 

@@ -7,28 +7,9 @@ import type {
   ChannelMessage,
 } from './types/index.js'
 
-/**
- * Shares one upstream WebSocket connection between same-origin browser
- * contexts.
- *
- * One instance holds the Web Lock and owns the connection. Other instances
- * route operations through it over a BroadcastChannel. Leadership and the
- * connection are recovered automatically when the owning context disappears.
- *
- * @typeParam Topic - Topic names accepted by {@link subscribe},
- *   {@link unsubscribe}, and {@link gossip}.
- * @typeParam Gossip - Detail sent and received through gossip events.
- * @typeParam Offer - Detail sent by {@link offer}.
- * @typeParam Answer - Detail received by answer events.
- * @typeParam RPCRequest - Detail accepted by {@link invoke} and
- *   {@link request}.
- * @typeParam RPCResponse - Detail resolved by {@link request}.
- */
 export class OriginSocket<
   Topic extends string,
-  Gossip,
-  Offer,
-  Answer,
+  Message,
   RPCRequest,
   RPCResponse,
 > {
@@ -47,11 +28,10 @@ export class OriginSocket<
   private broadcastChannel: BroadcastChannel | null = null
   private webSocket: WebSocket | null = null
 
-  // Replicated topics ordered by local instances.
   private originTopics: Map<Topic, number> | null = null
   // A best effort disconnected queue mainly to allow calls before websocket is ready
   private upstreamQueue: Array<
-    Context<RPCRequest | RPCResponse | Gossip | Offer | Topic>
+    Context<Topic | Message | RPCRequest | RPCResponse>
   > | null = null
   // Replicated topics ordered by upstream.
   private upstreamTopics: Map<Topic, number> | null = null
