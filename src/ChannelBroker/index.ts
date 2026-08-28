@@ -145,6 +145,7 @@ export class ChannelBroker<
             topic: ctx.topic,
             from: 'server',
             peerOnly: true,
+            amount: topicSubscribers.size,
           }
         ).buffer
         for (const channel of topicSubscribers.values()) {
@@ -158,6 +159,7 @@ export class ChannelBroker<
         kind: 'subscribe',
         topic: ctx.topic,
         from: 'server',
+        amount: topicSubscribers.size,
       }).buffer
       for (const channel of topicSubscribers.values()) {
         void channel.send(buffer)
@@ -179,6 +181,7 @@ export class ChannelBroker<
             topic: ctx.topic,
             from: 'server',
             peerOnly: true,
+            amount: topicSubscribers.size - 1,
           }
         ).buffer
         for (const channel of topicSubscribers.values()) {
@@ -192,6 +195,7 @@ export class ChannelBroker<
         kind: 'unsubscribe',
         topic: ctx.topic,
         from: 'server',
+        amount: topicSubscribers.size - 1,
       }).buffer
       for (const channel of topicSubscribers.values()) {
         void channel.send(buffer)

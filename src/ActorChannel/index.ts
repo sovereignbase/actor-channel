@@ -272,27 +272,25 @@ export class ActorChannel<
               //  SUBSCRIBE //
               ///////////////
               if (ctx.kind === 'subscribe' && ctx.from === 'server') {
+                if (ctx.amount === undefined) return
                 const topics = this.brokerTopics.get(socket)
                 if (!topics)
                   return void this.brokerTopics.set(
                     socket,
-                    new Map([[ctx.topic, 1]])
+                    new Map([[ctx.topic, ctx.amount]])
                   )
-                return void topics.set(
-                  ctx.topic,
-                  (topics.get(ctx.topic) ?? 0) + 1
-                )
+                return void topics.set(ctx.topic, ctx.amount)
               }
 
               ///////////////////
               //  UNSUBSCRIBE //
               /////////////////
               if (ctx.kind === 'unsubscribe' && ctx.from === 'server') {
+                if (ctx.amount === undefined) return
                 const topics = this.brokerTopics.get(socket)
-                const subscriberCount = topics?.get(ctx.topic)
-                if (!topics || !subscriberCount) return
-                if (subscriberCount > 1)
-                  return void topics.set(ctx.topic, subscriberCount - 1)
+                if (!topics) return
+                if (ctx.amount > 0)
+                  return void topics.set(ctx.topic, ctx.amount)
                 void topics.delete(ctx.topic)
                 if (topics.size < 1) void this.brokerTopics.delete(socket)
                 return
