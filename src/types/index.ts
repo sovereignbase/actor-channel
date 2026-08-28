@@ -72,31 +72,31 @@ export type ActorChannelEventListenerFor<
 //  CHANNEL MANAGER  //
 //=================//
 
-export type ChannelManagerEventMap<RPCRequest, RPCResponse> = {
+export type ChannelBrokerEventMap<RPCRequest, RPCResponse> = {
   violation: string
   request: [RPCRequest, (response: RPCResponse) => void]
 }
 
-export type ChannelManagerEventListener<
+export type ChannelBrokerEventListener<
   RPCRequest,
   RPCResponse,
-  K extends keyof ChannelManagerEventMap<RPCRequest, RPCResponse>,
+  K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,
 > =
   | ((
-      event: CustomEvent<ChannelManagerEventMap<RPCRequest, RPCResponse>[K]>
+      event: CustomEvent<ChannelBrokerEventMap<RPCRequest, RPCResponse>[K]>
     ) => void)
   | {
       handleEvent(
-        event: CustomEvent<ChannelManagerEventMap<RPCRequest, RPCResponse>[K]>
+        event: CustomEvent<ChannelBrokerEventMap<RPCRequest, RPCResponse>[K]>
       ): void
     }
 
-export type ChannelManagerEventListenerFor<
+export type ChannelBrokerEventListenerFor<
   RPCRequest,
   RPCResponse,
   K extends string,
-> = K extends keyof ChannelManagerEventMap<RPCRequest, RPCResponse>
-  ? ChannelManagerEventListener<RPCRequest, RPCResponse, K>
+> = K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>
+  ? ChannelBrokerEventListener<RPCRequest, RPCResponse, K>
   : EventListenerOrEventListenerObject
 
 export type ActorChannelPair = {

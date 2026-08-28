@@ -13,45 +13,32 @@ export class ActorChannel<
 > {
   private readonly eventTarget = new EventTarget()
   //
-  private readonly onlineHandler = async () => {
-    void this.connectTo()
-  }
+  private readonly broadcastChannel: BroadcastChannel = new BroadcastChannel(
+    '@sovereignbase/actor-socket:broadcast-channel'
+  )
   //
-  private isLeader: boolean = false
-  private readyState: number = 0
+  private readonly localSubscriptions: Map<Topic, number> = new Map()
+  private readonly remoteSubscriptions: Map<Topic, number> = new Map()
   //
-  private broadcastChannel: BroadcastChannel | null = null
+  private readonly myRequests: Set<string> = new Set()
+  private readonly mySubscriptions: Set<Topic> = new Set()
   //
-  private webSocket: WebSocket | null = null
-  private websocketQueue: Array<
+  private readonly myBrokers: Set<WebSocket> = new Set()
+  private readonly myQueue: Array<
     Context<Topic | Message | RPCRequest | RPCResponse>
   > | null = null
-  //
-  private localSubscriptions: Map<Topic, number> | null = null
-  private remoteSubscriptions: Map<Topic, number> | null = null
-  //
-  private myRequests: Set<string> | null = null
-  private mySubscriptions: Set<Topic> | null = null
 
-  /**
-   * @param channelManagerUrl - Tries to connect immideatly if defined
-   */
-  constructor(channelManagerUrl?: string) {
-    this.broadcastChannel = new BroadcastChannel(
-      '@sovereignbase/actor-socket:broadcast-channel'
-    )
-    this.myRequests = new Set()
-    this.mySubscriptions = new Set()
-    this.localSubscriptions = new Map()
-    this.remoteSubscriptions = new Map()
-
+  constructor() {
     this.broadcastChannel.onmessage = (
       event: MessageEvent<Context<Topic | Message | RPCRequest | RPCResponse>>
     ) => {
       const ctx = event.data
       if (!ctx) return
 
-      if (ctx.kind === 'status') {
+      ////////////////
+      //  REQUEST  //
+      //////////////
+      if (ctx.kind === 'request') {
         if (this.isLeader && this.isOnline)
           void this.broadcastChannel!.postMessage({
             kind: 'connected',
@@ -165,18 +152,9 @@ export class ActorChannel<
         return
       }
     }
-
-    void this.broadcastChannel.postMessage({ kind: 'status' })
-
-    if (navigator.onLine && channelManagerUrl !== undefined)
-      void this.connectTo(channelManagerUrl)
-    if (this.channelManagerUrl) {
-      void self.addEventListener('connected', this.onlineHandler)
-    }
   }
 
-  /** Acquires leadership and maintains the shared upstream connection. */
-  public async connectTo(channelManagerUrl: string) {
+  async addBroker(channelBrokerUrl: string) {
     if (typeof this.channelManagerUrl !== 'string' || this.readyState) return
     if (!self.navigator.locks) return
 

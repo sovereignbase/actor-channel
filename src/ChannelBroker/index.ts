@@ -1,11 +1,11 @@
 import type {
   Context,
   ActorChannelPair,
-  ChannelManagerEventMap,
+  ChannelBrokerEventMap,
 } from '../types/index.js'
 import { decode, encode } from '@msgpack/msgpack'
 
-export class ChannelManager<RPCRequest, RPCResponse> {
+export class ChannelBroker<RPCRequest, RPCResponse> {
   private readonly eventTarget: EventTarget = new EventTarget()
   ///
   private readonly syncTopics: Map<string, Set<ActorChannelPair>> = new Map()
@@ -217,18 +217,18 @@ export class ChannelManager<RPCRequest, RPCResponse> {
     else return void topicSubscribers.delete(subscriber)
   }
   private dispatchEvent<
-    K extends keyof ChannelManagerEventMap<RPCRequest, RPCResponse>,
-  >(type: K, detail: ChannelManagerEventMap<RPCRequest, RPCResponse>[K]): void {
+    K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,
+  >(type: K, detail: ChannelBrokerEventMap<RPCRequest, RPCResponse>[K]): void {
     return void this.eventTarget.dispatchEvent(
       new CustomEvent(type, { detail })
     )
   }
 
   public addEventListener<
-    K extends keyof ChannelManagerEventMap<RPCRequest, RPCResponse>,
+    K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,
   >(
     type: K,
-    listener: ChannelManagerEventMap<RPCRequest, RPCResponse> | null,
+    listener: ChannelBrokerEventMap<RPCRequest, RPCResponse> | null,
     options?: boolean | AddEventListenerOptions
   ): void {
     return void this.eventTarget.addEventListener(
@@ -239,10 +239,10 @@ export class ChannelManager<RPCRequest, RPCResponse> {
   }
 
   public removeEventListener<
-    K extends keyof ChannelManagerEventMap<RPCRequest, RPCResponse>,
+    K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,
   >(
     type: K,
-    listener: ChannelManagerEventMap<RPCRequest, RPCResponse> | null,
+    listener: ChannelBrokerEventMap<RPCRequest, RPCResponse> | null,
     options?: boolean | EventListenerOptions
   ): void {
     return void this.eventTarget.removeEventListener(
