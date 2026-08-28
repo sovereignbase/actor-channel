@@ -1,4 +1,1 @@
-
-Unsubscribe laskee aina topicSubscribers.size - 1, vaikka sender ei olisi setissä. Duplikaatti tai virheellinen unsubscribe lähettää silloin väärän absoluuttisen määrän. Lisäksi normaalisti nollaan tyhjentynyttä topic-settiä ei poisteta mapista.
-
 RPC-count on edelleen best effort rinnakkaisissa muutoksissa. Web Lock valitsee tilannekyselyn vastaajan, mutta varsinaiset rpcFanout()-muutokset eivät ole saman lukon alla. Kaksi tabia voi siis tuottaa samasta prev-arvosta eri ketjun.

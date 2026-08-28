@@ -73,7 +73,7 @@ export class ChannelBroker<
               kind: 'response',
               id: ctx.id,
               detail,
-            }).buffer
+            }).slice().buffer
           )
         },
       ])
@@ -91,7 +91,7 @@ export class ChannelBroker<
         topic: ctx.topic,
         from: 'server',
         detail: ctx.detail,
-      }).buffer
+      }).slice().buffer
       for (const channel of subscribers.values()) {
         void channel.send(buffer)
       }
@@ -110,7 +110,7 @@ export class ChannelBroker<
         topic: ctx.topic,
         from: 'server',
         amount: subscribers.size,
-      }).buffer
+      }).slice().buffer
       for (const channel of subscribers.values()) {
         void channel.send(buffer)
       }
@@ -123,13 +123,14 @@ export class ChannelBroker<
 
     if (ctx?.kind === 'unsubscribe') {
       const subscribers = this.topicSubscribers.get(ctx.topic)
-      if (!subscribers) return
+      if (!subscribers?.has(sender))
+        return void this.dispatchEvent('violation', 'Unauthorized.')
       const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
         kind: 'unsubscribe',
         topic: ctx.topic,
         from: 'server',
         amount: subscribers.size - 1,
-      }).buffer
+      }).slice().buffer
       for (const channel of subscribers.values()) {
         void channel.send(buffer)
       }
@@ -152,7 +153,7 @@ export class ChannelBroker<
   ): void {
     return void this.handleMessage(
       sender,
-      encode({ kind, topic, from: 'client' }).buffer
+      encode({ kind, topic, from: 'client' }).slice().buffer
     )
   }
 

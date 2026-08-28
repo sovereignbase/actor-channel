@@ -1,53 +1,239 @@
-import { encode } from '@msgpack/msgpack'
-import { describe, expect, it } from 'vitest'
-import { decodeContext } from '../../src/index.js'
+import { decode, decodeMulti, encode } from '@msgpack/msgpack'
+import { describe, expect, it, vi } from 'vitest'
+import { ChannelBroker } from '../../src/index.js'
+import type { ActorChannelPair, Context } from '../../src/types/index.js'
 
-const buffer = (value: unknown): ArrayBuffer => {
-  const encoded = encode(value)
-  return encoded.buffer.slice(
-    encoded.byteOffset,
-    encoded.byteOffset + encoded.byteLength
+type TestContext = Context<string, { value: number }, string, string>
+const message = (ctx: unknown): ArrayBuffer => {
+  const data = encode(ctx)
+  return data.buffer.slice(
+    data.byteOffset,
+    data.byteOffset + data.byteLength
   ) as ArrayBuffer
 }
 
-describe('decodeContext', () => {
-  it.each([
-    { kind: 'invoke', detail: null },
-    { kind: 'offer', id: '1', detail: null },
-    { kind: 'withdraw', id: '1' },
-    { kind: 'answer', id: '1', detail: null },
-    { kind: 'gossip', topic: 'news', from: 'client', detail: null },
-    {
-      kind: 'request',
-      id: '1',
-      phase: 'request',
-      detail: null,
-    },
-    { kind: 'subscribe', topic: 'news', from: 'server' },
-    { kind: 'unsubscribe', topic: 'news', from: 'client' },
-  ])('decodes and validates $kind', (ctx) => {
-    expect(decodeContext(buffer(ctx))).toEqual(ctx)
+class TestChannel implements ActorChannelPair {
+  readyState: number = WebSocket.OPEN
+  send = vi.fn<(data: ArrayBuffer) => void>()
+}
+
+const decoded = (channel: TestChannel): TestContext[] =>
+  channel.send.mock.calls.map(
+    ([data]) => decodeMulti(data)[Symbol.iterator]().next().value as TestContext
+  )
+
+describe('ChannelBroker', () => {
+  it('reports malformed messages and unauthorized RPC requests', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    const violations: string[] = []
+    const listener = (event: CustomEvent<string>) =>
+      violations.push(event.detail)
+    broker.addEventListener('violation', listener)
+    broker.handleMessage(channel, new Uint8Array([1]) as unknown as ArrayBuffer)
+    broker.handleMessage(channel, new Uint8Array([0xc1]).buffer)
+    broker.handleMessage(
+      channel,
+      message({ kind: 'request', id: '1', detail: 'x' })
+    )
+    broker.removeEventListener('violation', listener)
+    broker.handleMessage(channel, new Uint8Array([0xc1]).buffer)
+    expect(violations).toEqual([
+      'Wrong message encoding.',
+      'Wrong message encoding.',
+      'Unauthorized.',
+    ])
   })
 
-  it.each([
-    null,
-    [],
-    {},
-    { kind: 'unknown' },
-    { kind: 'invoke' },
-    { kind: 'offer', id: 1, detail: null },
-    { kind: 'withdraw', id: null },
-    { kind: 'answer', id: '1' },
-    { kind: 'gossip', topic: 1, from: 'client', detail: null },
-    { kind: 'gossip', topic: 'news', from: 'peer', detail: null },
-    { kind: 'request', id: '1', phase: 'pending', detail: null },
-    { kind: 'subscribe', topic: 'news', from: 'peer' },
-    { kind: 'unsubscribe', topic: null, from: 'client' },
-  ])('rejects a value that is not a Context', (value) => {
-    expect(decodeContext(buffer(value))).toBe(false)
+  it('dispatches authorized RPC and responds only while open', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    const requests: string[] = []
+    broker.addChannel(channel, true)
+    broker.addEventListener('request', (event) => {
+      const [request, respond] = event.detail
+      requests.push(request)
+      respond('ok')
+      channel.readyState = WebSocket.CLOSED
+      respond('ignored')
+    })
+    broker.handleMessage(
+      channel,
+      message({ kind: 'request', id: '1', detail: 'run' })
+    )
+    expect(requests).toEqual(['run'])
+    expect(decoded(channel)).toEqual([
+      { kind: 'response', id: '1', detail: 'ok' },
+    ])
   })
 
-  it('rejects malformed MessagePack', () => {
-    expect(decodeContext(new Uint8Array([0xc1]).buffer)).toBe(false)
+  it('fans amounts and publications only to topic subscribers', () => {
+    const broker = new ChannelBroker<
+      string,
+      { value: number },
+      string,
+      string
+    >()
+    const first = new TestChannel()
+    const second = new TestChannel()
+    const outsider = new TestChannel()
+    broker.handleMessage(
+      first,
+      message({ kind: 'subscribe', topic: 'a', from: 'client' })
+    )
+    broker.handleMessage(
+      second,
+      message({ kind: 'subscribe', topic: 'a', from: 'client' })
+    )
+    broker.handleMessage(
+      outsider,
+      message({ kind: 'subscribe', topic: 'b', from: 'client' })
+    )
+    broker.handleMessage(
+      first,
+      message({
+        kind: 'publish',
+        topic: 'a',
+        from: 'client',
+        detail: { value: 1 },
+      })
+    )
+    expect(decoded(first)).toEqual([
+      { kind: 'subscribe', topic: 'a', from: 'server', amount: 1 },
+      { kind: 'subscribe', topic: 'a', from: 'server', amount: 2 },
+      { kind: 'publish', topic: 'a', from: 'server', detail: { value: 1 } },
+    ])
+    expect(decoded(second)).toEqual([
+      { kind: 'subscribe', topic: 'a', from: 'server', amount: 2 },
+      { kind: 'publish', topic: 'a', from: 'server', detail: { value: 1 } },
+    ])
+    expect(decoded(outsider)).toEqual([
+      { kind: 'subscribe', topic: 'b', from: 'server', amount: 1 },
+    ])
+  })
+
+  it('sends independently decodable protocol frames', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    broker.handleMessage(
+      channel,
+      message({ kind: 'subscribe', topic: 'a', from: 'client' })
+    )
+    expect(() => decode(channel.send.mock.calls[0]![0])).not.toThrow()
+  })
+
+  it('fans unsubscribe amounts and removes empty topics', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const first = new TestChannel()
+    const second = new TestChannel()
+    broker.handleMessage(
+      first,
+      message({ kind: 'subscribe', topic: 'a', from: 'client' })
+    )
+    broker.handleMessage(
+      second,
+      message({ kind: 'subscribe', topic: 'a', from: 'client' })
+    )
+    first.send.mockClear()
+    second.send.mockClear()
+    broker.handleMessage(
+      first,
+      message({ kind: 'unsubscribe', topic: 'a', from: 'client' })
+    )
+    broker.handleMessage(
+      second,
+      message({ kind: 'unsubscribe', topic: 'a', from: 'client' })
+    )
+    broker.deleteChannel(second)
+    expect(decoded(first)).toEqual([
+      { kind: 'unsubscribe', topic: 'a', from: 'server', amount: 1 },
+    ])
+    expect(decoded(second)).toEqual([
+      { kind: 'unsubscribe', topic: 'a', from: 'server', amount: 1 },
+      { kind: 'unsubscribe', topic: 'a', from: 'server', amount: 0 },
+    ])
+    expect((broker as any).topicSubscribers.size).toBe(0)
+  })
+
+  it('ignores unknown topics and message kinds', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    broker.handleMessage(
+      channel,
+      message({
+        kind: 'publish',
+        topic: 'missing',
+        from: 'client',
+        detail: null,
+      })
+    )
+    broker.handleMessage(
+      channel,
+      message({ kind: 'unsubscribe', topic: 'missing', from: 'client' })
+    )
+    broker.handleMessage(channel, message({ kind: 'unknown' }))
+    broker.deleteChannel(channel)
+    expect(channel.send).not.toHaveBeenCalled()
+  })
+
+  it('does not advertise a lower amount for a non-subscriber unsubscribe', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const subscriber = new TestChannel()
+    const outsider = new TestChannel()
+    broker.handleMessage(
+      subscriber,
+      message({ kind: 'subscribe', topic: 'a', from: 'client' })
+    )
+    subscriber.send.mockClear()
+    broker.handleMessage(
+      outsider,
+      message({ kind: 'unsubscribe', topic: 'a', from: 'client' })
+    )
+    expect(decoded(subscriber)).toEqual([])
+    expect((broker as any).topicSubscribers.get('a').size).toBe(1)
+  })
+
+  it('applies initial addChannel topics through the subscription protocol', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    broker.addChannel(channel, false, ['a'])
+    expect(decoded(channel)).toEqual([
+      { kind: 'subscribe', topic: 'a', from: 'server', amount: 1 },
+    ])
+  })
+
+  it('notifies subscribers when deleteChannel removes a channel', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const first = new TestChannel()
+    const second = new TestChannel()
+    broker.handleMessage(
+      first,
+      message({ kind: 'subscribe', topic: 'a', from: 'client' })
+    )
+    broker.handleMessage(
+      second,
+      message({ kind: 'subscribe', topic: 'a', from: 'client' })
+    )
+    first.send.mockClear()
+    broker.deleteChannel(second)
+    expect(decoded(first)).toEqual([
+      { kind: 'unsubscribe', topic: 'a', from: 'server', amount: 1 },
+    ])
+  })
+
+  it('cleans an empty topic and tolerates a direct unknown removal', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    broker.handleMessage(
+      channel,
+      message({ kind: 'subscribe', topic: 'a', from: 'client' })
+    )
+    broker.handleMessage(
+      channel,
+      message({ kind: 'unsubscribe', topic: 'a', from: 'client' })
+    )
+    ;(broker as any).unsubscribeTopic(channel, 'missing')
+    broker.deleteChannel(channel)
+    expect((broker as any).topicSubscribers.size).toBe(0)
   })
 })

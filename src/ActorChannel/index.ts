@@ -49,7 +49,7 @@ export class ActorChannel<
       detail,
     }
     void void this.broadcastChannel.postMessage(ctx)
-    const buffer = encode<typeof ctx>(ctx).buffer
+    const buffer = encode<typeof ctx>(ctx).slice().buffer
     void this.remoteProcedureCall(buffer)
     return id
   }
@@ -153,7 +153,7 @@ export class ActorChannel<
       //  REQUEST  //
       //////////////
       if (ctx.kind === 'request') {
-        void this.remoteProcedureCall(encode<typeof ctx>(ctx).buffer)
+        void this.remoteProcedureCall(encode<typeof ctx>(ctx).slice().buffer)
       }
       ////////////////
       //  RESPONSE //
@@ -229,7 +229,7 @@ export class ActorChannel<
                     kind: 'subscribe',
                     topic,
                     from: 'client',
-                  }).buffer
+                  }).slice().buffer
                 )
               }
             })
@@ -365,7 +365,7 @@ export class ActorChannel<
     ctx: Context<Topic, Message, RPCRequest, RPCResponse>
   ): void {
     if (ctx.kind !== 'publish') return
-    const buffer = encode<typeof ctx>(ctx).buffer
+    const buffer = encode<typeof ctx>(ctx).slice().buffer
     for (const [socket, topics] of this.brokerTopics)
       if (topics.has(ctx.topic) && socket.readyState === WebSocket.OPEN)
         void socket.send(buffer)
@@ -391,7 +391,7 @@ export class ActorChannel<
 
     if (this.allBrokers.size < 1) return
 
-    const buffer = encode<typeof ctx>(ctx).buffer
+    const buffer = encode<typeof ctx>(ctx).slice().buffer
     for (const socket of this.allBrokers.values())
       if (socket.readyState === WebSocket.OPEN) void socket.send(buffer)
     return
