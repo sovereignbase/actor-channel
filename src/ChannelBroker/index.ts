@@ -2,6 +2,7 @@ import type {
   Context,
   ActorChannelPair,
   ChannelBrokerEventMap,
+  ChannelBrokerEventListenerFor,
 } from '../types/index.js'
 import { decode, encode } from '@msgpack/msgpack'
 
@@ -239,7 +240,7 @@ export class ChannelBroker<
     K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,
   >(
     type: K,
-    listener: ChannelBrokerEventMap<RPCRequest, RPCResponse> | null,
+    listener: ChannelBrokerEventListenerFor<RPCRequest, RPCResponse, K> | null,
     options?: boolean | AddEventListenerOptions
   ): void {
     return void this.eventTarget.addEventListener(
@@ -253,7 +254,7 @@ export class ChannelBroker<
     K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,
   >(
     type: K,
-    listener: ChannelBrokerEventMap<RPCRequest, RPCResponse> | null,
+    listener: ChannelBrokerEventListenerFor<RPCRequest, RPCResponse, K> | null,
     options?: boolean | EventListenerOptions
   ): void {
     return void this.eventTarget.removeEventListener(
