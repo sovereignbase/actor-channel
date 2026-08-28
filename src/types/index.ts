@@ -34,6 +34,10 @@ export type Context<Topic, Message, RPCRequest, RPCResponse> =
       from: 'server' | 'client'
       peerOnly?: boolean
     }
+  | {
+      kind: 'rpc'
+      diff: number
+    }
 
 //=================//
 //  ACTOR CHANNEL //
