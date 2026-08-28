@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test'
+import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: 'test/e2e/runsInBrowsers',
@@ -22,6 +22,22 @@ export default defineConfig({
     {
       name: 'webkit',
       use: { browserName: 'webkit' },
+    },
+    {
+      name: 'mobile-chromium',
+      use: { ...devices['Pixel 7'] },
+    },
+    {
+      name: 'mobile-firefox',
+      use: {
+        browserName: 'firefox',
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+      },
+    },
+    {
+      name: 'mobile-webkit',
+      use: { ...devices['iPhone 15'] },
     },
   ],
 })
