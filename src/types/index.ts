@@ -36,70 +36,66 @@ export type Context<T> =
     }
 
 //=================//
-//  ACTOR SOCKET  //
+//  ACTOR CHANNEL //
 //===============//
 
-export type ActorSocketEventMap<RPCResponse, Topic, Message> = {
+export type ActorChannelEventMap<RPCResponse, Topic, Message> = {
   response: [id: string, response?: RPCResponse]
   message: [topic: Topic, Message]
 }
 
-export type ActorSocketEventListener<
+export type ActorChannelEventListener<
   RPCResponse,
   Topic,
   Message,
-  K extends keyof ActorSocketEventMap<RPCResponse, Topic, Message>,
+  K extends keyof ActorChannelEventMap<RPCResponse, Topic, Message>,
 > =
   | ((
-      event: CustomEvent<ActorSocketEventMap<RPCResponse, Topic, Message>[K]>
+      event: CustomEvent<ActorChannelEventMap<RPCResponse, Topic, Message>[K]>
     ) => void)
   | {
       handleEvent(
-        event: CustomEvent<ActorSocketEventMap<RPCResponse, Topic, Message>[K]>
+        event: CustomEvent<ActorChannelEventMap<RPCResponse, Topic, Message>[K]>
       ): void
     }
 
-export type ActorSocketEventListenerFor<
-  RPCResponse,
-  Topic,
-  Message,
-  K extends string,
-> = K extends keyof ActorSocketEventMap<RPCResponse, Topic, Message>
-  ? ActorSocketEventListener<RPCResponse, Topic, Message, K>
-  : EventListenerOrEventListenerObject
+export type ActorChannelEventListenerFor<RPCResponse, Topic, Message> =
+  K extends keyof ActorChannelEventMap<RPCResponse, Topic, Message>
+    ? ActorChannelEventListener<RPCResponse, Topic, Message>
+    : EventListenerOrEventListenerObject
 
 //===================//
-//  SOCKET MANAGER  //
+//  CHANNEL MANAGER  //
 //=================//
 
-export type SocketManagerEventMap<RPCRequest, RPCResponse> = {
+export type ChannelManagerEventMap<RPCRequest, RPCResponse> = {
   violation: string
   request: [RPCRequest, (response: RPCResponse) => void]
 }
 
-export type SocketManagerEventListener<
+export type ChannelManagerEventListener<
   RPCRequest,
   RPCResponse,
-  K extends keyof SocketManagerEventMap<RPCRequest, RPCResponse>,
+  K extends keyof ChannelManagerEventMap<RPCRequest, RPCResponse>,
 > =
   | ((
-      event: CustomEvent<SocketManagerEventMap<RPCRequest, RPCResponse>[K]>
+      event: CustomEvent<ChannelManagerEventMap<RPCRequest, RPCResponse>[K]>
     ) => void)
   | {
       handleEvent(
-        event: CustomEvent<SocketManagerEventMap<RPCRequest, RPCResponse>[K]>
+        event: CustomEvent<ChannelManagerEventMap<RPCRequest, RPCResponse>[K]>
       ): void
     }
 
-export type SocketManagerEventListenerFor<
+export type ChannelManagerEventListenerFor<
   RPCRequest,
   RPCResponse,
   K extends string,
-> = K extends keyof SocketManagerEventMap<RPCRequest, RPCResponse>
-  ? SocketManagerEventListener<RPCRequest, RPCResponse, K>
+> = K extends keyof ChannelManagerEventMap<RPCRequest, RPCResponse>
+  ? ChannelManagerEventListener<RPCRequest, RPCResponse, K>
   : EventListenerOrEventListenerObject
 
-export type SocketDummy = {
+export type ActorChannelPair = {
   send: (data: ArrayBuffer) => void
   readyState: number
 }

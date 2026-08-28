@@ -1,3 +1,3 @@
-export * from './ActorSocket/index.js'
-export * from './SocketManager/index.js'
+export * from './ActorChannel/index.js'
+export * from './ChannelManager/index.js'
 export type * from './types/index.js'
