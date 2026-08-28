@@ -1,7 +1,7 @@
 {
   "type": "module",
   "license": "Apache-2.0",
-  "name": "@sovereignbase/package-name",
+  "name": "@sovereignbase/actor-socket",
   "version": "0.0.0",
   "description": "",
   "keywords": [
@@ -55,12 +55,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sovereignbase/package-name.git"
+    "url": "git+https://github.com/sovereignbase/actor-socket.git"
   },
   "bugs": {
-    "url": "https://github.com/sovereignbase/package-name/issues"
+    "url": "https://github.com/sovereignbase/actor-socket/issues"
   },
-  "homepage": "https://sovereignbase.dev/package-name",
+  "homepage": "https://sovereignbase.dev/actor-socket",
   "dependencies": {
     "@msgpack/msgpack": "^3.1.3"
   }

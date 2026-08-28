@@ -59,10 +59,14 @@ export type ActorChannelEventListener<
       ): void
     }
 
-export type ActorChannelEventListenerFor<RPCResponse, Topic, Message> =
-  K extends keyof ActorChannelEventMap<RPCResponse, Topic, Message>
-    ? ActorChannelEventListener<RPCResponse, Topic, Message>
-    : EventListenerOrEventListenerObject
+export type ActorChannelEventListenerFor<
+  RPCResponse,
+  Topic,
+  Message,
+  K extends string,
+> = K extends keyof ActorChannelEventMap<RPCResponse, Topic, Message>
+  ? ActorChannelEventListener<RPCResponse, Topic, Message, K>
+  : EventListenerOrEventListenerObject
 
 //===================//
 //  CHANNEL MANAGER  //
