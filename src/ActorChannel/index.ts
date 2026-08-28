@@ -137,7 +137,7 @@ export class ActorChannel<
       if (!ctx) return
 
       if (ctx.kind === 'rpc') {
-        this.rpcBrokers += ctx.diff
+        this.rpcBrokers = Math.max(0, this.rpcBrokers + ctx.diff)
         return
       }
 
@@ -321,7 +321,7 @@ export class ActorChannel<
   }
 
   private rpcFanout(diff: number): void {
-    this.rpcBrokers += diff
+    this.rpcBrokers = Math.max(0, this.rpcBrokers + diff)
     void this.broadcastChannel.postMessage({ kind: 'rpc', diff })
   }
 
