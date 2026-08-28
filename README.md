@@ -6,6 +6,8 @@
 
 # actor-socket
 
+Client ▣ ActorChannel ⇄ ChannelBroker ☷ Server
+
 ## Installation
 
 ## Usage
