@@ -152,6 +152,7 @@ export class ActorChannel<
       //////////////
       if (ctx.kind === 'response') {
         if (!this.myRequests.has(ctx.id)) return
+        void this.myRequests.delete(ctx.id)
         return void this.dispatchEvent('response', [ctx.id, ctx.detail])
       }
       ////////////////
