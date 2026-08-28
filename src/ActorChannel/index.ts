@@ -20,6 +20,7 @@ export class ActorChannel<
   //
   private readonly allBrokers: Set<WebSocket> = new Set()
   private readonly rpcEnabled: Set<WebSocket> = new Set()
+  private readonly rpcOnline: Set<WebSocket> = new Set()
   //
   private readonly brokerTopics: Map<Topic, Set<WebSocket>> = new Map()
   private readonly channelTopic: Map<Topic, number> = new Map()
@@ -112,9 +113,21 @@ export class ActorChannel<
       }
     }
 
-    window.addEventListener('pagehide', () => fanoutTopics('unsubscribe'))
+    window.addEventListener('pagehide', () => {
+      fanoutTopics('unsubscribe')
+      const diff = -this.rpcOnline.size
+      void this.rpcOnline.clear()
+      if (diff) this.rpcFanout(diff)
+    })
     window.addEventListener('pageshow', (event) => {
-      if (event.persisted) fanoutTopics('subscribe')
+      if (!event.persisted) return
+      fanoutTopics('subscribe')
+      for (const socket of this.rpcEnabled) {
+        if (socket.readyState !== WebSocket.OPEN || this.rpcOnline.has(socket))
+          continue
+        void this.rpcOnline.add(socket)
+        this.rpcFanout(1)
+      }
     })
 
     this.broadcastChannel.onmessage = (
@@ -122,6 +135,11 @@ export class ActorChannel<
     ) => {
       const ctx = event.data
       if (!ctx) return
+
+      if (ctx.kind === 'rpc') {
+        this.rpcBrokers += ctx.diff
+        return
+      }
 
       ////////////////
       //  REQUEST  //
@@ -187,6 +205,10 @@ export class ActorChannel<
             if (rpcEnabled) void this.rpcEnabled.add(socket)
 
             void socket.addEventListener('open', () => {
+              if (rpcEnabled) {
+                void this.rpcOnline.add(socket)
+                this.rpcFanout(1)
+              }
               for (const topic of this.channelTopic.keys()) {
                 void socket.send(
                   encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
@@ -258,6 +280,8 @@ export class ActorChannel<
               })
             })
 
+            if (this.rpcOnline.delete(socket)) this.rpcFanout(-1)
+
             void this.allBrokers.delete(socket)
             void this.rpcEnabled.delete(socket)
 
@@ -285,6 +309,11 @@ export class ActorChannel<
     if (this.rpcEnabled.size < 1) return
     for (const socket of this.rpcEnabled.values())
       if (socket.readyState == WebSocket.OPEN) return void socket.send(buffer)
+  }
+
+  private rpcFanout(diff: number): void {
+    this.rpcBrokers += diff
+    void this.broadcastChannel.postMessage({ kind: 'rpc', diff })
   }
 
   private publishFanout(
