@@ -91,6 +91,26 @@ export class ActorChannel<
   ///////    //    //  //  //////  //  //
 
   constructor() {
+    //////////////////////////////////
+    // Best effort truth keeper xD //
+    ////////////////////////////////
+    const fanoutTopics = (kind: 'subscribe' | 'unsubscribe') => {
+      for (const topic of this.myTopics) {
+        const ctx = {
+          kind,
+          topic,
+          from: 'client',
+        } as Context<Topic, Message, RPCRequest, RPCResponse>
+        void this.broadcastChannel.postMessage(ctx)
+        void this.subscribeFanout(ctx)
+      }
+    }
+
+    window.addEventListener('pagehide', () => fanoutTopics('unsubscribe'))
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) fanoutTopics('subscribe')
+    })
+
     this.broadcastChannel.onmessage = (
       event: MessageEvent<Context<Topic, Message, RPCRequest, RPCResponse>>
     ) => {
