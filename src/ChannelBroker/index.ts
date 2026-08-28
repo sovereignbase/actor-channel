@@ -14,8 +14,10 @@ export class ChannelBroker<
 > {
   private readonly eventTarget: EventTarget = new EventTarget()
   ///
-  private readonly syncTopics: Map<string, Set<ActorChannelPair>> = new Map()
-  private readonly peerTopics: Map<string, Set<ActorChannelPair>> = new Map()
+  private readonly topicSubscribers: Map<
+    string,
+    Set<ActorChannelPair>
+  > = new Map()
   ///
   private readonly rpcEnabled: Set<ActorChannelPair> = new Set()
   ///
@@ -23,38 +25,23 @@ export class ChannelBroker<
   addChannel(
     channel: ActorChannelPair,
     rpcEnabled: boolean = false,
-    subscriptions?: {
-      syncTopics?: Array<string>
-      peerTopics?: Array<string>
-    }
+    topics?: Array<string>
   ): void {
     if (rpcEnabled) void this.rpcEnabled.add(channel)
 
-    if (!subscriptions) return
-    if (subscriptions.syncTopics) {
-      for (const topic of subscriptions.syncTopics) {
-        void this.subscribeSyncTopic(channel, topic)
-      }
-    }
-    if (subscriptions.peerTopics) {
-      for (const topic of subscriptions.peerTopics) {
-        void this.subscribePeerTopic(channel, topic)
-      }
-    }
+    if (!topics) return
+    for (const topic of topics)
+      void this.handleSubscription(channel, 'subscribe', topic)
     return
   }
 
   deleteChannel(channel: ActorChannelPair): void {
     void this.rpcEnabled.delete(channel)
 
-    for (const [topic, subscribers] of this.syncTopics) {
-      void subscribers.delete(channel)
-      if (subscribers.size < 1) void this.syncTopics.delete(topic)
-    }
-
-    for (const [topic, subscribers] of this.peerTopics) {
-      void subscribers.delete(channel)
-      if (subscribers.size < 1) void this.peerTopics.delete(topic)
+    for (const [topic, subscribers] of this.topicSubscribers) {
+      if (subscribers.has(channel))
+        void this.handleSubscription(channel, 'unsubscribe', topic)
+      if (subscribers.size < 1) void this.topicSubscribers.delete(topic)
     }
     return
   }
@@ -99,33 +86,15 @@ export class ChannelBroker<
     //////////////
 
     if (ctx?.kind === 'publish') {
-      if (ctx.peerOnly) {
-        const topicSubscribers = this.peerTopics.get(ctx.topic)
-        if (!topicSubscribers) return
-        const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>(
-          {
-            kind: 'publish',
-            topic: ctx.topic,
-            from: 'server',
-            detail: ctx.detail,
-            peerOnly: true,
-          }
-        ).buffer
-        for (const channel of topicSubscribers.values()) {
-          void channel.send(buffer)
-        }
-        return
-      }
-
-      const topicSubscribers = this.syncTopics.get(ctx.topic)
-      if (!topicSubscribers) return
+      const subscribers = this.topicSubscribers.get(ctx.topic)
+      if (!subscribers) return
       const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
         kind: 'publish',
         topic: ctx.topic,
         from: 'server',
         detail: ctx.detail,
       }).buffer
-      for (const channel of topicSubscribers.values()) {
+      for (const channel of subscribers.values()) {
         void channel.send(buffer)
       }
       return
@@ -136,32 +105,15 @@ export class ChannelBroker<
     ////////////////
 
     if (ctx?.kind === 'subscribe') {
-      if (ctx.peerOnly) {
-        void this.subscribePeerTopic(sender, ctx.topic)
-        const topicSubscribers = this.peerTopics.get(ctx.topic)!
-        const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>(
-          {
-            kind: 'subscribe',
-            topic: ctx.topic,
-            from: 'server',
-            peerOnly: true,
-            amount: topicSubscribers.size,
-          }
-        ).buffer
-        for (const channel of topicSubscribers.values()) {
-          void channel.send(buffer)
-        }
-        return
-      }
-      void this.subscribeSyncTopic(sender, ctx.topic)
-      const topicSubscribers = this.syncTopics.get(ctx.topic)!
+      void this.subscribeTopic(sender, ctx.topic)
+      const subscribers = this.topicSubscribers.get(ctx.topic)!
       const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
         kind: 'subscribe',
         topic: ctx.topic,
         from: 'server',
-        amount: topicSubscribers.size,
+        amount: subscribers.size,
       }).buffer
-      for (const channel of topicSubscribers.values()) {
+      for (const channel of subscribers.values()) {
         void channel.send(buffer)
       }
       return
@@ -172,35 +124,18 @@ export class ChannelBroker<
     //////////////////
 
     if (ctx?.kind === 'unsubscribe') {
-      if (ctx.peerOnly) {
-        const topicSubscribers = this.peerTopics.get(ctx.topic)
-        if (!topicSubscribers) return
-        const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>(
-          {
-            kind: 'unsubscribe',
-            topic: ctx.topic,
-            from: 'server',
-            peerOnly: true,
-            amount: topicSubscribers.size - 1,
-          }
-        ).buffer
-        for (const channel of topicSubscribers.values()) {
-          void channel.send(buffer)
-        }
-        return void this.unsubscribePeerTopic(sender, ctx.topic)
-      }
-      const topicSubscribers = this.syncTopics.get(ctx.topic)
-      if (!topicSubscribers) return
+      const subscribers = this.topicSubscribers.get(ctx.topic)
+      if (!subscribers) return
       const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
         kind: 'unsubscribe',
         topic: ctx.topic,
         from: 'server',
-        amount: topicSubscribers.size - 1,
+        amount: subscribers.size - 1,
       }).buffer
-      for (const channel of topicSubscribers.values()) {
+      for (const channel of subscribers.values()) {
         void channel.send(buffer)
       }
-      return void this.unsubscribeSyncTopic(sender, ctx.topic)
+      return void this.unsubscribeTopic(sender, ctx.topic)
     }
 
     return
@@ -212,40 +147,30 @@ export class ChannelBroker<
   //    //  //      //      //      //      //  //      ///
   //    //  //////  //////  //      //////  //  //  /////
 
-  private subscribeSyncTopic(
-    subscriber: ActorChannelPair,
+  private handleSubscription(
+    sender: ActorChannelPair,
+    kind: 'subscribe' | 'unsubscribe',
     topic: string
   ): void {
-    const topicSubscribers = this.syncTopics.get(topic)
-    if (!topicSubscribers)
-      return void this.syncTopics.set(topic, new Set([subscriber]))
-    else return void topicSubscribers.add(subscriber)
-  }
-  private unsubscribeSyncTopic(
-    subscriber: ActorChannelPair,
-    topic: string
-  ): void {
-    const topicSubscribers = this.syncTopics.get(topic)
-    if (!topicSubscribers) return
-    else return void topicSubscribers.delete(subscriber)
+    return void this.handleMessage(
+      sender,
+      encode({ kind, topic, from: 'client' }).buffer
+    )
   }
 
-  private subscribePeerTopic(
-    subscriber: ActorChannelPair,
-    topic: string
-  ): void {
-    const topicSubscribers = this.peerTopics.get(topic)
-    if (!topicSubscribers)
-      return void this.peerTopics.set(topic, new Set([subscriber]))
-    else return void topicSubscribers.add(subscriber)
+  private subscribeTopic(subscriber: ActorChannelPair, topic: string): void {
+    const subscribers = this.topicSubscribers.get(topic)
+    if (!subscribers)
+      return void this.topicSubscribers.set(topic, new Set([subscriber]))
+    else return void subscribers.add(subscriber)
   }
-  private unsubscribePeerTopic(
+  private unsubscribeTopic(
     subscriber: ActorChannelPair,
     topic: string
   ): void {
-    const topicSubscribers = this.peerTopics.get(topic)
-    if (!topicSubscribers) return
-    else return void topicSubscribers.delete(subscriber)
+    const subscribers = this.topicSubscribers.get(topic)
+    if (!subscribers) return
+    else return void subscribers.delete(subscriber)
   }
   private dispatchEvent<
     K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,

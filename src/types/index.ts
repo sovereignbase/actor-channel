@@ -20,20 +20,17 @@ export type Context<Topic, Message, RPCRequest, RPCResponse> =
       topic: Topic
       from: 'server' | 'client'
       detail: Message
-      peerOnly?: boolean
     }
   | {
       kind: 'subscribe'
       topic: Topic
       from: 'server' | 'client'
-      peerOnly?: boolean
       amount?: number
     }
   | {
       kind: 'unsubscribe'
       topic: Topic
       from: 'server' | 'client'
-      peerOnly?: boolean
       amount?: number
     }
   ///////////////

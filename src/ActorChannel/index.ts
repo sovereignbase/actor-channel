@@ -54,13 +54,12 @@ export class ActorChannel<
     return id
   }
 
-  publish(topic: Topic, detail: Message, peerOnly: boolean = false): void {
+  publish(topic: Topic, detail: Message): void {
     const ctx: Context<Topic, Message, RPCRequest, RPCResponse> = {
       kind: 'publish',
       from: 'client',
       topic,
       detail,
-      peerOnly,
     }
     void this.broadcastChannel.postMessage(ctx)
     return void this.publishFanout(ctx)
