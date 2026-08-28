@@ -21,10 +21,11 @@ export class ActorChannel<
   private readonly remoteSubscriptions: Map<Topic, number> = new Map()
   //
   private readonly myRequests: Set<string> = new Set()
-  private readonly mySubscriptions: Set<Topic> = new Set()
+  private readonly myTopics: Set<Topic> = new Set()
   //
-  private readonly myBrokers: Set<WebSocket> = new Set()
-  private readonly myQueue: Array<
+  private readonly relayOnly: Set<WebSocket> = new Set()
+  private readonly rpcEnabled: Set<WebSocket> = new Set()
+  private readonly contextQueue: Array<
     Context<Topic | Message | RPCRequest | RPCResponse>
   > | null = null
 
