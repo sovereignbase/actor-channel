@@ -14,10 +14,8 @@ export class ChannelBroker<
 > {
   private readonly eventTarget: EventTarget = new EventTarget()
   ///
-  private readonly topicSubscribers: Map<
-    string,
-    Set<ActorChannelPair>
-  > = new Map()
+  private readonly topicSubscribers: Map<string, Set<ActorChannelPair>> =
+    new Map()
   ///
   private readonly rpcEnabled: Set<ActorChannelPair> = new Set()
   ///
@@ -164,10 +162,7 @@ export class ChannelBroker<
       return void this.topicSubscribers.set(topic, new Set([subscriber]))
     else return void subscribers.add(subscriber)
   }
-  private unsubscribeTopic(
-    subscriber: ActorChannelPair,
-    topic: string
-  ): void {
+  private unsubscribeTopic(subscriber: ActorChannelPair, topic: string): void {
     const subscribers = this.topicSubscribers.get(topic)
     if (!subscribers) return
     else return void subscribers.delete(subscriber)
