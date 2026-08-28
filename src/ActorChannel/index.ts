@@ -11,6 +11,7 @@ export class ActorChannel<
   RPCRequest,
   RPCResponse,
 > {
+  //
   private readonly eventTarget = new EventTarget()
   //
   private readonly broadcastChannel: BroadcastChannel = new BroadcastChannel(
@@ -26,6 +27,11 @@ export class ActorChannel<
   private readonly myRequests: Set<string> = new Set()
   private readonly myTopics: Set<Topic> = new Set()
   //
+  private rpcBrokers: number = 0
+
+  public get rpcAvailable(): boolean {
+    return this.rpcBrokers > 0
+  }
 
   //      //  //////  //////////  //    //      //      ////       ////
   ////  ////  //          //      //    //    //  //    //  //  ///
@@ -34,7 +40,7 @@ export class ActorChannel<
   //      //  //////      //      //    //      //      ////    ////
 
   request(detail: RPCRequest): string {
-    const id = crypto.randomUUID()
+    const id = window.crypto.randomUUID()
     void this.myRequests.add(id)
     const ctx: Context<Topic, Message, RPCRequest, RPCResponse> = {
       kind: 'request',
@@ -157,11 +163,11 @@ export class ActorChannel<
     brokerUrl: string,
     rpcEnabled: boolean = false
   ): Promise<void> {
-    if (typeof brokerUrl !== 'string' || !self.navigator.locks) return
+    if (typeof brokerUrl !== 'string' || !window.navigator.locks) return
 
     try {
       while (true) {
-        await self.navigator.locks.request(
+        await window.navigator.locks.request(
           `@sovereignbase/actor-channel:web-lock:${brokerUrl}`,
           { ifAvailable: true },
           async (lockHandle) => {
