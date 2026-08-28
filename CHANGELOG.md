@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.0 (2026-08-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* release first version
+
+### Features
+
+* release first version ([a2d15e3](https://github.com/sovereignbase/actor-channel/commit/a2d15e3f30194f6c4f5c80c4a0c7a56f6483aacc))
+
+
+### Bug Fixes
+
+* jsr config ([104b9fa](https://github.com/sovereignbase/actor-channel/commit/104b9fa47ac3d102ff063e417e65375a2fd00526))
+
+## Changelog
+
 ## version - date
 
 - changes
