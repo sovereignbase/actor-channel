@@ -35,8 +35,10 @@ export type Context<Topic, Message, RPCRequest, RPCResponse> =
       peerOnly?: boolean
     }
   | {
-      kind: 'rpc'
-      diff: number
+      kind: 'internal'
+      detail:
+        | { var: 'rpcBrokers'; prev: number; count: number }
+        | { var: 'rpcBrokers'; ping: true }
     }
 
 //=================//

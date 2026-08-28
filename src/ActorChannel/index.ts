@@ -28,7 +28,7 @@ export class ActorChannel<
   private readonly myRequests: Set<string> = new Set()
   private readonly myTopics: Set<Topic> = new Set()
   //
-  private rpcBrokers: number = 0
+  private rpcBrokers: number = -1
 
   public get rpcAvailable(): boolean {
     return this.rpcBrokers > 0
@@ -136,9 +136,18 @@ export class ActorChannel<
       const ctx = event.data
       if (!ctx) return
 
-      if (ctx.kind === 'rpc') {
-        this.rpcBrokers = Math.max(0, this.rpcBrokers + ctx.diff)
-        return
+      if (ctx.kind === 'internal' && ctx.detail.var === 'rpcBrokers') {
+        if ('ping' in ctx.detail) return void this.respondRpcBrokers()
+        if (
+          this.rpcBrokers < 0 ||
+          ctx.detail.prev === this.rpcBrokers ||
+          ctx.detail.prev === ctx.detail.count
+        )
+          return void (this.rpcBrokers = ctx.detail.count)
+        return void this.broadcastChannel.postMessage({
+          kind: 'internal',
+          detail: { var: 'rpcBrokers', ping: true },
+        })
       }
 
       ////////////////
@@ -176,6 +185,11 @@ export class ActorChannel<
         return void this.subscribeFanout(ctx)
       }
     }
+
+    void this.broadcastChannel.postMessage({
+      kind: 'internal',
+      detail: { var: 'rpcBrokers', ping: true },
+    })
   }
 
   async addBroker(
@@ -321,8 +335,33 @@ export class ActorChannel<
   }
 
   private rpcFanout(diff: number): void {
-    this.rpcBrokers = Math.max(0, this.rpcBrokers + diff)
-    void this.broadcastChannel.postMessage({ kind: 'rpc', diff })
+    const prev = Math.max(0, this.rpcBrokers)
+    const count = Math.max(0, prev + diff)
+    this.rpcBrokers = count
+    void this.broadcastChannel.postMessage({
+      kind: 'internal',
+      detail: { var: 'rpcBrokers', prev, count },
+    })
+  }
+
+  private respondRpcBrokers(): void {
+    if (this.rpcBrokers < 0) return
+    void window.navigator.locks.request(
+      '@sovereignbase/actor-socket:web-lock:internal:rpcBrokers',
+      { ifAvailable: true },
+      async (lock) => {
+        if (!lock) return
+        void this.broadcastChannel.postMessage({
+          kind: 'internal',
+          detail: {
+            var: 'rpcBrokers',
+            prev: this.rpcBrokers,
+            count: this.rpcBrokers,
+          },
+        })
+        await new Promise<void>((resolve) => setTimeout(resolve))
+      }
+    )
   }
 
   private publishFanout(
