@@ -11,15 +11,26 @@
 <li><a href="" aria-current="page">ActorChannelEventListenerFor</a></li></ul>
 <h1>Type Alias ActorChannelEventListenerFor&lt;RPCResponse, Topic, Message, K&gt;</h1></div>
 <div class="tsd-signature"><span class="tsd-kind-type-alias">ActorChannelEventListenerFor</span><span class="tsd-signature-symbol">:</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#k">K</a> <span class="tsd-signature-keyword">extends</span> <span class="tsd-signature-keyword">keyof</span> <a href="ActorChannelEventMap.html" class="tsd-signature-type tsd-kind-type-alias">ActorChannelEventMap</a><span class="tsd-signature-symbol">&lt;</span><br/>    <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">,</span><br/>    <a class="tsd-signature-type tsd-kind-type-parameter" href="#topic">Topic</a><span class="tsd-signature-symbol">,</span><br/>    <a class="tsd-signature-type tsd-kind-type-parameter" href="#message">Message</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">&gt;</span><br/>    <span class="tsd-signature-symbol">?</span> <a href="ActorChannelEventListener.html" class="tsd-signature-type tsd-kind-type-alias">ActorChannelEventListener</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#topic">Topic</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#message">Message</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#k">K</a><span class="tsd-signature-symbol">&gt;</span><br/>    <span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">EventListenerOrEventListenerObject</span></div>
+<div class="tsd-comment tsd-typography"><p>Resolves a typed <a href="../classes/ActorChannel.html" class="tsd-kind-class">ActorChannel</a> listener for known event types and a
+standard DOM event listener for other event types.</p>
+</div>
 <section class="tsd-panel">
 <h4>Type Parameters</h4>
 <ul class="tsd-type-parameter-list">
-<li><span id="rpcresponse"><span class="tsd-kind-type-parameter">RPCResponse</span></span></li>
-<li><span id="topic"><span class="tsd-kind-type-parameter">Topic</span></span></li>
-<li><span id="message"><span class="tsd-kind-type-parameter">Message</span></span></li>
-<li><span id="k"><span class="tsd-kind-type-parameter">K</span> <span class="tsd-signature-keyword">extends</span> <span class="tsd-signature-type">string</span></span></li></ul></section><aside class="tsd-sources">
+<li><span id="rpcresponse"><span class="tsd-kind-type-parameter">RPCResponse</span></span>
+<div class="tsd-comment tsd-typography"><p>The RPC response payload type.</p>
+</div></li>
+<li><span id="topic"><span class="tsd-kind-type-parameter">Topic</span></span>
+<div class="tsd-comment tsd-typography"><p>The topic identifier type.</p>
+</div></li>
+<li><span id="message"><span class="tsd-kind-type-parameter">Message</span></span>
+<div class="tsd-comment tsd-typography"><p>The published message type.</p>
+</div></li>
+<li><span id="k"><span class="tsd-kind-type-parameter">K</span> <span class="tsd-signature-keyword">extends</span> <span class="tsd-signature-type">string</span></span>
+<div class="tsd-comment tsd-typography"><p>The event type.</p>
+</div></li></ul></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/ad3f8cd6ab3880896ee17c4026e578a3870e8052/src/types/index.ts#L70">types/index.ts:70</a></li></ul></aside></div>
+<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/0c66c37c69d2c66368be95a86b4f5b3353e25682/src/types/index.ts#L106">types/index.ts:106</a></li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

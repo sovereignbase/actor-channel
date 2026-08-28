@@ -5,6 +5,15 @@ import type {
   ActorChannelEventListenerFor,
 } from '../types/index.js'
 
+/**
+ * Coordinates RPC requests and topic messages across the current browsing
+ * context, other same-origin browsing contexts, and connected brokers.
+ *
+ * @typeParam Topic - The topic identifier type.
+ * @typeParam Message - The published message type.
+ * @typeParam RPCRequest - The RPC request payload type.
+ * @typeParam RPCResponse - The RPC response payload type.
+ */
 export class ActorChannel<
   Topic extends string,
   Message,
@@ -30,6 +39,7 @@ export class ActorChannel<
   //
   private rpcBrokers: number = -1
 
+  /** Whether at least one RPC-enabled broker is currently available. */
   public get rpcAvailable(): boolean {
     return this.rpcBrokers > 0
   }
@@ -40,6 +50,14 @@ export class ActorChannel<
   //      //  //          //      //    //    //  //    //  //      ///
   //      //  //////      //      //    //      //      ////    ////
 
+  /**
+   * Sends an RPC request to an available RPC-enabled broker.
+   *
+   * The request is not queued when no RPC-enabled broker is available.
+   *
+   * @param detail - The request payload.
+   * @returns The identifier assigned to the request.
+   */
   request(detail: RPCRequest): string {
     const id = window.crypto.randomUUID()
     void this.myRequests.add(id)
@@ -54,6 +72,12 @@ export class ActorChannel<
     return id
   }
 
+  /**
+   * Publishes a message to the local swarm and subscribed broker peers.
+   *
+   * @param topic - The topic to publish to.
+   * @param detail - The message payload.
+   */
   publish(topic: Topic, detail: Message): void {
     const ctx: Context<Topic, Message, RPCRequest, RPCResponse> = {
       kind: 'publish',
@@ -65,6 +89,13 @@ export class ActorChannel<
     return void this.publishFanout(ctx)
   }
 
+  /**
+   * Subscribes this browsing context to a topic.
+   *
+   * Repeated subscriptions to the same topic have no effect.
+   *
+   * @param topic - The topic to subscribe to.
+   */
   subscribe(topic: Topic): void {
     if (this.myTopics.has(topic)) return
 
@@ -79,6 +110,11 @@ export class ActorChannel<
     return void this.subscribeFanout(ctx)
   }
 
+  /**
+   * Removes this browsing context's subscription to a topic.
+   *
+   * @param topic - The topic to unsubscribe from.
+   */
   unsubscribe(topic: Topic): void {
     if (!this.myTopics.delete(topic)) return
 
@@ -96,6 +132,7 @@ export class ActorChannel<
   //   //    //    //  //  //      ////
   ///////    //    //  //  //////  //  //
 
+  /** Creates an actor channel for the current browsing context. */
   constructor() {
     //////////////////////////////////
     // Best effort truth keeper xD //
@@ -191,6 +228,14 @@ export class ActorChannel<
     })
   }
 
+  /**
+   * Maintains a best-effort connection to a broker while this channel owns
+   * the broker URL's Web Lock.
+   *
+   * @param brokerUrl - The broker WebSocket URL.
+   * @param rpcEnabled - Whether the connection may carry RPC requests.
+   * @returns A promise that settles when connection maintenance stops.
+   */
   async addBroker(
     brokerUrl: string,
     rpcEnabled: boolean = false
@@ -408,6 +453,13 @@ export class ActorChannel<
     )
   }
 
+  /**
+   * Registers an event listener.
+   *
+   * @param type - The event type.
+   * @param listener - The listener to register.
+   * @param options - The event listener options.
+   */
   public addEventListener<
     K extends keyof ActorChannelEventMap<RPCResponse, Topic, Message>,
   >(
@@ -427,6 +479,13 @@ export class ActorChannel<
     )
   }
 
+  /**
+   * Removes a previously registered event listener.
+   *
+   * @param type - The event type.
+   * @param listener - The listener to remove.
+   * @param options - The event listener options.
+   */
   public removeEventListener<
     K extends keyof ActorChannelEventMap<RPCResponse, Topic, Message>,
   >(

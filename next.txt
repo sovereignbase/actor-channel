@@ -1,1 +1,0 @@
-RPC-count on edelleen best effort rinnakkaisissa muutoksissa. Web Lock valitsee tilannekyselyn vastaajan, mutta varsinaiset rpcFanout()-muutokset eivät ole saman lukon alla. Kaksi tabia voi siis tuottaa samasta prev-arvosta eri ketjun.

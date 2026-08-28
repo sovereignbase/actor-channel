@@ -10,15 +10,26 @@
 <ul class="tsd-breadcrumb" aria-label="Breadcrumb">
 <li><a href="" aria-current="page">ChannelBroker</a></li></ul>
 <h1>Class ChannelBroker&lt;Topic, Message, RPCRequest, RPCResponse&gt;</h1></div>
+<section class="tsd-panel tsd-comment">
+<div class="tsd-comment tsd-typography"><p>Routes RPC requests and topic messages between connected actor channels.</p>
+</div></section>
 <section class="tsd-panel">
 <h4>Type Parameters</h4>
 <ul class="tsd-type-parameter-list">
-<li><span id="topic"><span class="tsd-kind-type-parameter">Topic</span> <span class="tsd-signature-keyword">extends</span> <span class="tsd-signature-type">string</span></span></li>
-<li><span id="message"><span class="tsd-kind-type-parameter">Message</span></span></li>
-<li><span id="rpcrequest"><span class="tsd-kind-type-parameter">RPCRequest</span></span></li>
-<li><span id="rpcresponse"><span class="tsd-kind-type-parameter">RPCResponse</span></span></li></ul></section><aside class="tsd-sources">
+<li><span id="topic"><span class="tsd-kind-type-parameter">Topic</span> <span class="tsd-signature-keyword">extends</span> <span class="tsd-signature-type">string</span></span>
+<div class="tsd-comment tsd-typography"><p>The topic identifier type.</p>
+</div></li>
+<li><span id="message"><span class="tsd-kind-type-parameter">Message</span></span>
+<div class="tsd-comment tsd-typography"><p>The published message type.</p>
+</div></li>
+<li><span id="rpcrequest"><span class="tsd-kind-type-parameter">RPCRequest</span></span>
+<div class="tsd-comment tsd-typography"><p>The RPC request payload type.</p>
+</div></li>
+<li><span id="rpcresponse"><span class="tsd-kind-type-parameter">RPCResponse</span></span>
+<div class="tsd-comment tsd-typography"><p>The RPC response payload type.</p>
+</div></li></ul></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/ad3f8cd6ab3880896ee17c4026e578a3870e8052/src/ChannelBroker/index.ts#L9">ChannelBroker/index.ts:9</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/0c66c37c69d2c66368be95a86b4f5b3353e25682/src/ChannelBroker/index.ts#L17">ChannelBroker/index.ts:17</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -48,10 +59,18 @@
 <section class="tsd-panel">
 <h4>Type Parameters</h4>
 <ul class="tsd-type-parameter-list">
-<li><span id="constructorchannelbrokertopic"><span class="tsd-kind-type-parameter">Topic</span> <span class="tsd-signature-keyword">extends</span> <span class="tsd-signature-type">string</span></span></li>
-<li><span id="constructorchannelbrokermessage"><span class="tsd-kind-type-parameter">Message</span></span></li>
-<li><span id="constructorchannelbrokerrpcrequest"><span class="tsd-kind-type-parameter">RPCRequest</span></span></li>
-<li><span id="constructorchannelbrokerrpcresponse"><span class="tsd-kind-type-parameter">RPCResponse</span></span></li></ul></section>
+<li><span id="constructorchannelbrokertopic"><span class="tsd-kind-type-parameter">Topic</span> <span class="tsd-signature-keyword">extends</span> <span class="tsd-signature-type">string</span></span>
+<div class="tsd-comment tsd-typography"><p>The topic identifier type.</p>
+</div></li>
+<li><span id="constructorchannelbrokermessage"><span class="tsd-kind-type-parameter">Message</span></span>
+<div class="tsd-comment tsd-typography"><p>The published message type.</p>
+</div></li>
+<li><span id="constructorchannelbrokerrpcrequest"><span class="tsd-kind-type-parameter">RPCRequest</span></span>
+<div class="tsd-comment tsd-typography"><p>The RPC request payload type.</p>
+</div></li>
+<li><span id="constructorchannelbrokerrpcresponse"><span class="tsd-kind-type-parameter">RPCResponse</span></span>
+<div class="tsd-comment tsd-typography"><p>The RPC response payload type.</p>
+</div></li></ul></section>
 <h4 class="tsd-returns-title">Returns <a href="" class="tsd-signature-type tsd-kind-class">ChannelBroker</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#topic">Topic</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#message">Message</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcrequest">RPCRequest</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">&gt;</span></h4></div></li></ul></section></section></details>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Methods"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="methods-1">Methods<a href="#methods-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
@@ -62,21 +81,31 @@
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="addchannel-1"><span class="tsd-kind-call-signature">addChannel</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">channel</span><span class="tsd-signature-symbol">:</span> <a href="../types/ActorChannelPair.html" class="tsd-signature-type tsd-kind-type-alias">ActorChannelPair</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">rpcEnabled</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">topics</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">void</span><a href="#addchannel-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Adds a channel to the broker.</p>
+</div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
-<li><span><span class="tsd-kind-parameter">channel</span>: <a href="../types/ActorChannelPair.html" class="tsd-signature-type tsd-kind-type-alias">ActorChannelPair</a></span></li>
-<li><span><span class="tsd-kind-parameter">rpcEnabled</span>: <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol"> = false</span></span></li>
-<li><span><code class="tsd-tag">Optional</code><span class="tsd-kind-parameter">topics</span>: <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span></span></li></ul></div>
+<li><span><span class="tsd-kind-parameter">channel</span>: <a href="../types/ActorChannelPair.html" class="tsd-signature-type tsd-kind-type-alias">ActorChannelPair</a></span>
+<div class="tsd-comment tsd-typography"><p>The channel transport to add.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">rpcEnabled</span>: <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol"> = false</span></span>
+<div class="tsd-comment tsd-typography"><p>Whether the channel may issue RPC requests.</p>
+</div></li>
+<li><span><code class="tsd-tag">Optional</code><span class="tsd-kind-parameter">topics</span>: <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span></span>
+<div class="tsd-comment tsd-typography"><p>The topics initially subscribed by the channel.</p>
+</div></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/ad3f8cd6ab3880896ee17c4026e578a3870e8052/src/ChannelBroker/index.ts#L23">ChannelBroker/index.ts:23</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/0c66c37c69d2c66368be95a86b4f5b3353e25682/src/ChannelBroker/index.ts#L38">ChannelBroker/index.ts:38</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="addeventlistener"><span>add<wbr/>Event<wbr/>Listener</span><a href="#addeventlistener" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="addeventlistener-1"><span class="tsd-kind-call-signature">addEventListener</span><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#addeventlistenerk">K</a> <span class="tsd-signature-keyword">extends</span> <span class="tsd-signature-keyword">keyof</span> <a href="../types/ChannelBrokerEventMap.html" class="tsd-signature-type tsd-kind-type-alias">ChannelBrokerEventMap</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcrequest">RPCRequest</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">type</span><span class="tsd-signature-symbol">:</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#addeventlistenerk">K</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">listener</span><span class="tsd-signature-symbol">:</span> <a href="../types/ChannelBrokerEventListenerFor.html" class="tsd-signature-type tsd-kind-type-alias">ChannelBrokerEventListenerFor</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcrequest">RPCRequest</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#addeventlistenerk">K</a><span class="tsd-signature-symbol">&gt;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">options</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">AddEventListenerOptions</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">void</span><a href="#addeventlistener-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Registers an event listener.</p>
+</div>
 <section class="tsd-panel">
 <h4>Type Parameters</h4>
 <ul class="tsd-type-parameter-list">
@@ -84,45 +113,63 @@
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
-<li><span><span class="tsd-kind-parameter">type</span>: <a class="tsd-signature-type tsd-kind-type-parameter" href="#addeventlistenerk">K</a></span></li>
-<li><span><span class="tsd-kind-parameter">listener</span>: <a href="../types/ChannelBrokerEventListenerFor.html" class="tsd-signature-type tsd-kind-type-alias">ChannelBrokerEventListenerFor</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcrequest">RPCRequest</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#addeventlistenerk">K</a><span class="tsd-signature-symbol">&gt;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></span></li>
-<li><span><code class="tsd-tag">Optional</code><span class="tsd-kind-parameter">options</span>: <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">AddEventListenerOptions</span></span></li></ul></div>
+<li><span><span class="tsd-kind-parameter">type</span>: <a class="tsd-signature-type tsd-kind-type-parameter" href="#addeventlistenerk">K</a></span>
+<div class="tsd-comment tsd-typography"><p>The event type.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">listener</span>: <a href="../types/ChannelBrokerEventListenerFor.html" class="tsd-signature-type tsd-kind-type-alias">ChannelBrokerEventListenerFor</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcrequest">RPCRequest</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#addeventlistenerk">K</a><span class="tsd-signature-symbol">&gt;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></span>
+<div class="tsd-comment tsd-typography"><p>The listener to register.</p>
+</div></li>
+<li><span><code class="tsd-tag">Optional</code><span class="tsd-kind-parameter">options</span>: <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">AddEventListenerOptions</span></span>
+<div class="tsd-comment tsd-typography"><p>The event listener options.</p>
+</div></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/ad3f8cd6ab3880896ee17c4026e578a3870e8052/src/ChannelBroker/index.ts#L179">ChannelBroker/index.ts:179</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/0c66c37c69d2c66368be95a86b4f5b3353e25682/src/ChannelBroker/index.ts#L212">ChannelBroker/index.ts:212</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="deletechannel"><span>delete<wbr/>Channel</span><a href="#deletechannel" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="deletechannel-1"><span class="tsd-kind-call-signature">deleteChannel</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">channel</span><span class="tsd-signature-symbol">:</span> <a href="../types/ActorChannelPair.html" class="tsd-signature-type tsd-kind-type-alias">ActorChannelPair</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">void</span><a href="#deletechannel-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Removes a channel and all of its subscriptions from the broker.</p>
+</div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
-<li><span><span class="tsd-kind-parameter">channel</span>: <a href="../types/ActorChannelPair.html" class="tsd-signature-type tsd-kind-type-alias">ActorChannelPair</a></span></li></ul></div>
+<li><span><span class="tsd-kind-parameter">channel</span>: <a href="../types/ActorChannelPair.html" class="tsd-signature-type tsd-kind-type-alias">ActorChannelPair</a></span>
+<div class="tsd-comment tsd-typography"><p>The channel transport to remove.</p>
+</div></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/ad3f8cd6ab3880896ee17c4026e578a3870e8052/src/ChannelBroker/index.ts#L36">ChannelBroker/index.ts:36</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/0c66c37c69d2c66368be95a86b4f5b3353e25682/src/ChannelBroker/index.ts#L56">ChannelBroker/index.ts:56</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="handlemessage"><span>handle<wbr/>Message</span><a href="#handlemessage" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="handlemessage-1"><span class="tsd-kind-call-signature">handleMessage</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">sender</span><span class="tsd-signature-symbol">:</span> <a href="../types/ActorChannelPair.html" class="tsd-signature-type tsd-kind-type-alias">ActorChannelPair</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">message</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ArrayBuffer</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><a href="#handlemessage-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Handles an encoded protocol message received from a channel.</p>
+</div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
-<li><span><span class="tsd-kind-parameter">sender</span>: <a href="../types/ActorChannelPair.html" class="tsd-signature-type tsd-kind-type-alias">ActorChannelPair</a></span></li>
-<li><span><span class="tsd-kind-parameter">message</span>: <span class="tsd-signature-type">ArrayBuffer</span></span></li></ul></div>
+<li><span><span class="tsd-kind-parameter">sender</span>: <a href="../types/ActorChannelPair.html" class="tsd-signature-type tsd-kind-type-alias">ActorChannelPair</a></span>
+<div class="tsd-comment tsd-typography"><p>The channel that sent the message.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">message</span>: <span class="tsd-signature-type">ArrayBuffer</span></span>
+<div class="tsd-comment tsd-typography"><p>The MessagePack-encoded protocol message.</p>
+</div></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">undefined</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/ad3f8cd6ab3880896ee17c4026e578a3870e8052/src/ChannelBroker/index.ts#L47">ChannelBroker/index.ts:47</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/0c66c37c69d2c66368be95a86b4f5b3353e25682/src/ChannelBroker/index.ts#L73">ChannelBroker/index.ts:73</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="removeeventlistener"><span>remove<wbr/>Event<wbr/>Listener</span><a href="#removeeventlistener" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="removeeventlistener-1"><span class="tsd-kind-call-signature">removeEventListener</span><span class="tsd-signature-symbol">&lt;</span><br/>    <a class="tsd-signature-type tsd-kind-type-parameter" href="#removeeventlistenerk">K</a> <span class="tsd-signature-keyword">extends</span> <span class="tsd-signature-keyword">keyof</span> <a href="../types/ChannelBrokerEventMap.html" class="tsd-signature-type tsd-kind-type-alias">ChannelBrokerEventMap</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcrequest">RPCRequest</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">type</span><span class="tsd-signature-symbol">:</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#removeeventlistenerk">K</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">listener</span><span class="tsd-signature-symbol">:</span> <a href="../types/ChannelBrokerEventListenerFor.html" class="tsd-signature-type tsd-kind-type-alias">ChannelBrokerEventListenerFor</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcrequest">RPCRequest</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#removeeventlistenerk">K</a><span class="tsd-signature-symbol">&gt;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">options</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">EventListenerOptions</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">void</span><a href="#removeeventlistener-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Removes a previously registered event listener.</p>
+</div>
 <section class="tsd-panel">
 <h4>Type Parameters</h4>
 <ul class="tsd-type-parameter-list">
@@ -130,12 +177,18 @@
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
-<li><span><span class="tsd-kind-parameter">type</span>: <a class="tsd-signature-type tsd-kind-type-parameter" href="#removeeventlistenerk">K</a></span></li>
-<li><span><span class="tsd-kind-parameter">listener</span>: <a href="../types/ChannelBrokerEventListenerFor.html" class="tsd-signature-type tsd-kind-type-alias">ChannelBrokerEventListenerFor</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcrequest">RPCRequest</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#removeeventlistenerk">K</a><span class="tsd-signature-symbol">&gt;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></span></li>
-<li><span><code class="tsd-tag">Optional</code><span class="tsd-kind-parameter">options</span>: <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">EventListenerOptions</span></span></li></ul></div>
+<li><span><span class="tsd-kind-parameter">type</span>: <a class="tsd-signature-type tsd-kind-type-parameter" href="#removeeventlistenerk">K</a></span>
+<div class="tsd-comment tsd-typography"><p>The event type.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">listener</span>: <a href="../types/ChannelBrokerEventListenerFor.html" class="tsd-signature-type tsd-kind-type-alias">ChannelBrokerEventListenerFor</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcrequest">RPCRequest</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#removeeventlistenerk">K</a><span class="tsd-signature-symbol">&gt;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></span>
+<div class="tsd-comment tsd-typography"><p>The listener to remove.</p>
+</div></li>
+<li><span><code class="tsd-tag">Optional</code><span class="tsd-kind-parameter">options</span>: <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">EventListenerOptions</span></span>
+<div class="tsd-comment tsd-typography"><p>The event listener options.</p>
+</div></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/ad3f8cd6ab3880896ee17c4026e578a3870e8052/src/ChannelBroker/index.ts#L193">ChannelBroker/index.ts:193</a></li></ul></aside></div></li></ul></section></section></details></div>
+<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/0c66c37c69d2c66368be95a86b4f5b3353e25682/src/ChannelBroker/index.ts#L233">ChannelBroker/index.ts:233</a></li></ul></aside></div></li></ul></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

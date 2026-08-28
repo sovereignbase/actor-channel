@@ -6,6 +6,14 @@ import type {
 } from '../types/index.js'
 import { decode, encode } from '@msgpack/msgpack'
 
+/**
+ * Routes RPC requests and topic messages between connected actor channels.
+ *
+ * @typeParam Topic - The topic identifier type.
+ * @typeParam Message - The published message type.
+ * @typeParam RPCRequest - The RPC request payload type.
+ * @typeParam RPCResponse - The RPC response payload type.
+ */
 export class ChannelBroker<
   Topic extends string,
   Message,
@@ -20,6 +28,13 @@ export class ChannelBroker<
   private readonly rpcEnabled: Set<ActorChannelPair> = new Set()
   ///
 
+  /**
+   * Adds a channel to the broker.
+   *
+   * @param channel - The channel transport to add.
+   * @param rpcEnabled - Whether the channel may issue RPC requests.
+   * @param topics - The topics initially subscribed by the channel.
+   */
   addChannel(
     channel: ActorChannelPair,
     rpcEnabled: boolean = false,
@@ -33,6 +48,11 @@ export class ChannelBroker<
     return
   }
 
+  /**
+   * Removes a channel and all of its subscriptions from the broker.
+   *
+   * @param channel - The channel transport to remove.
+   */
   deleteChannel(channel: ActorChannelPair): void {
     void this.rpcEnabled.delete(channel)
 
@@ -44,6 +64,12 @@ export class ChannelBroker<
     return
   }
 
+  /**
+   * Handles an encoded protocol message received from a channel.
+   *
+   * @param sender - The channel that sent the message.
+   * @param message - The MessagePack-encoded protocol message.
+   */
   handleMessage(sender: ActorChannelPair, message: ArrayBuffer) {
     let ctx: Context<Topic, Message, RPCRequest, RPCResponse>
 
@@ -176,6 +202,13 @@ export class ChannelBroker<
     )
   }
 
+  /**
+   * Registers an event listener.
+   *
+   * @param type - The event type.
+   * @param listener - The listener to register.
+   * @param options - The event listener options.
+   */
   public addEventListener<
     K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,
   >(
@@ -190,6 +223,13 @@ export class ChannelBroker<
     )
   }
 
+  /**
+   * Removes a previously registered event listener.
+   *
+   * @param type - The event type.
+   * @param listener - The listener to remove.
+   * @param options - The event listener options.
+   */
   public removeEventListener<
     K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,
   >(

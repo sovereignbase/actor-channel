@@ -10,14 +10,21 @@
 <ul class="tsd-breadcrumb" aria-label="Breadcrumb">
 <li><a href="" aria-current="page">ChannelBrokerEventMap</a></li></ul>
 <h1>Type Alias ChannelBrokerEventMap&lt;RPCRequest, RPCResponse&gt;</h1></div>
+<section class="tsd-panel tsd-comment">
+<div class="tsd-comment tsd-typography"><p>Maps each event dispatched by <a href="../classes/ChannelBroker.html" class="tsd-kind-class">ChannelBroker</a> to its payload.</p>
+</div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">type</span> <span class="tsd-kind-type-alias">ChannelBrokerEventMap</span><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcrequest">RPCRequest</a><span class="tsd-signature-symbol">,</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">&gt;</span> <span class="tsd-signature-symbol">=</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#request">request</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">[</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcrequest">RPCRequest</a><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">response</span><span class="tsd-signature-symbol">:</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#violation">violation</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div>
 <section class="tsd-panel">
 <h4>Type Parameters</h4>
 <ul class="tsd-type-parameter-list">
-<li><span id="rpcrequest"><span class="tsd-kind-type-parameter">RPCRequest</span></span></li>
-<li><span id="rpcresponse"><span class="tsd-kind-type-parameter">RPCResponse</span></span></li></ul></section><aside class="tsd-sources">
+<li><span id="rpcrequest"><span class="tsd-kind-type-parameter">RPCRequest</span></span>
+<div class="tsd-comment tsd-typography"><p>The RPC request payload type.</p>
+</div></li>
+<li><span id="rpcresponse"><span class="tsd-kind-type-parameter">RPCResponse</span></span>
+<div class="tsd-comment tsd-typography"><p>The RPC response payload type.</p>
+</div></li></ul></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/ad3f8cd6ab3880896ee17c4026e578a3870e8052/src/types/index.ts#L83">types/index.ts:83</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/0c66c37c69d2c66368be95a86b4f5b3353e25682/src/types/index.ts#L125">types/index.ts:125</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -33,14 +40,18 @@
 <section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="request"><span>request</span><a href="#request" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-signature"><span class="tsd-kind-property">request</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">[</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcrequest">RPCRequest</a><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">response</span><span class="tsd-signature-symbol">:</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">]</span></div><aside class="tsd-sources">
+<div class="tsd-signature"><span class="tsd-kind-property">request</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">[</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcrequest">RPCRequest</a><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">response</span><span class="tsd-signature-symbol">:</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#rpcresponse">RPCResponse</a><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">]</span></div>
+<div class="tsd-comment tsd-typography"><p>An RPC request and the callback used to send its response.</p>
+</div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/ad3f8cd6ab3880896ee17c4026e578a3870e8052/src/types/index.ts#L85">types/index.ts:85</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/0c66c37c69d2c66368be95a86b4f5b3353e25682/src/types/index.ts#L129">types/index.ts:129</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="violation"><span>violation</span><a href="#violation" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-signature"><span class="tsd-kind-property">violation</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
+<div class="tsd-signature"><span class="tsd-kind-property">violation</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
+<div class="tsd-comment tsd-typography"><p>A protocol violation description.</p>
+</div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/ad3f8cd6ab3880896ee17c4026e578a3870e8052/src/types/index.ts#L84">types/index.ts:84</a></li></ul></aside></section></section></details></div>
+<li>Defined in <a href="https://github.com/sovereignbase/actor-channel/blob/0c66c37c69d2c66368be95a86b4f5b3353e25682/src/types/index.ts#L127">types/index.ts:127</a></li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
