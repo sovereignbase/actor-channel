@@ -2,7 +2,7 @@
   "type": "module",
   "license": "Apache-2.0",
   "name": "@sovereignbase/actor-channel",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Bidirectional actor channels with pub/sub, peer relaying, and RPC.",
   "keywords": [
     "actor-model",
