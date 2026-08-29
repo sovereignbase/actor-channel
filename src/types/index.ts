@@ -119,10 +119,16 @@ export type ActorChannelEventListenerFor<
 /**
  * Maps each event dispatched by {@link ChannelBroker} to its payload.
  *
+ * @typeParam Topic - The topic identifier type.
  * @typeParam RPCRequest - The RPC request payload type.
  * @typeParam RPCResponse - The RPC response payload type.
  */
-export type ChannelBrokerEventMap<RPCRequest, RPCResponse> = {
+export type ChannelBrokerEventMap<RPCRequest, RPCResponse, Topic = string> = {
+  /** A channel whose attachment changed and the attachment's new state. */
+  attachment: {
+    owner: ActorChannelPair
+    attachment: ChannelAttachment<Topic>
+  }
   /** A protocol violation description. */
   violation: {
     violator: ActorChannelPair
@@ -135,6 +141,7 @@ export type ChannelBrokerEventMap<RPCRequest, RPCResponse> = {
 /**
  * A function or object that handles a {@link ChannelBroker} event.
  *
+ * @typeParam Topic - The topic identifier type.
  * @typeParam RPCRequest - The RPC request payload type.
  * @typeParam RPCResponse - The RPC response payload type.
  * @typeParam K - The event type.
@@ -143,13 +150,18 @@ export type ChannelBrokerEventListener<
   RPCRequest,
   RPCResponse,
   K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,
+  Topic = string,
 > =
   | ((
-      event: CustomEvent<ChannelBrokerEventMap<RPCRequest, RPCResponse>[K]>
+      event: CustomEvent<
+        ChannelBrokerEventMap<RPCRequest, RPCResponse, Topic>[K]
+      >
     ) => void)
   | {
       handleEvent(
-        event: CustomEvent<ChannelBrokerEventMap<RPCRequest, RPCResponse>[K]>
+        event: CustomEvent<
+          ChannelBrokerEventMap<RPCRequest, RPCResponse, Topic>[K]
+        >
       ): void
     }
 
@@ -157,6 +169,7 @@ export type ChannelBrokerEventListener<
  * Resolves a typed {@link ChannelBroker} listener for known event types and a
  * standard DOM event listener for other event types.
  *
+ * @typeParam Topic - The topic identifier type.
  * @typeParam RPCRequest - The RPC request payload type.
  * @typeParam RPCResponse - The RPC response payload type.
  * @typeParam K - The event type.
@@ -165,8 +178,9 @@ export type ChannelBrokerEventListenerFor<
   RPCRequest,
   RPCResponse,
   K extends string,
-> = K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>
-  ? ChannelBrokerEventListener<RPCRequest, RPCResponse, K>
+  Topic = string,
+> = K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse, Topic>
+  ? ChannelBrokerEventListener<RPCRequest, RPCResponse, K, Topic>
   : EventListenerOrEventListenerObject
 
 /**

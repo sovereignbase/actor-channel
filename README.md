@@ -106,6 +106,7 @@ The transport passed to `ChannelBroker` must expose `send(ArrayBuffer)` and
   RPC access, and initial subscriptions.
 - `deleteChannel(channel)` removes a transport and its subscriptions.
 - `handleMessage(channel, message)` handles an encoded client message.
+- `attachment` events receive the channel and its updated attachment.
 - `request` events receive the request and a response callback.
 - `violation` events receive the violating channel and a description.
 

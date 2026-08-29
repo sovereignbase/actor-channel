@@ -1,7 +1,11 @@
 import { decode, decodeMulti, encode } from '@msgpack/msgpack'
 import { describe, expect, it, vi } from 'vitest'
 import { ChannelBroker } from '../../src/index.js'
-import type { ActorChannelPair, Context } from '../../src/types/index.js'
+import type {
+  ActorChannelPair,
+  ChannelAttachment,
+  Context,
+} from '../../src/types/index.js'
 
 type TestContext = Context<string, { value: number }, string, string>
 const message = (ctx: unknown): ArrayBuffer => {
@@ -210,38 +214,72 @@ describe('ChannelBroker', () => {
   it('applies initial addChannel topics through the subscription protocol', () => {
     const broker = new ChannelBroker<string, unknown, string, string>()
     const channel = new TestChannel()
+    const listener = vi.fn()
+    broker.addEventListener('attachment', listener)
     broker.addChannel(channel, { topics: new Set(['a']) })
     expect(decoded(channel)).toEqual([
       { kind: 'subscribe', topic: 'a', from: 'server', amount: 1 },
     ])
+    expect(listener).not.toHaveBeenCalled()
   })
 
-  it('keeps attachment topics synchronized with subscription messages', () => {
+  it('reports only actual attachment topic changes synchronously', () => {
     const broker = new ChannelBroker<string, unknown, string, string>()
     const channel = new TestChannel()
     const attachment: { ipAddress: string; topics?: Set<string> } = {
       ipAddress: '192.0.2.1',
     }
+    const changes: Array<{
+      owner: ActorChannelPair
+      attachment: ChannelAttachment<string>
+    }> = []
+    broker.addEventListener('attachment', (event) => {
+      changes.push(event.detail)
+    })
     broker.addChannel(channel, attachment)
 
     expect(broker.channelAttachments.get(channel)).toBe(attachment)
     expect(attachment.topics).toBeUndefined()
+    expect(changes).toEqual([])
 
     broker.handleMessage(
       channel,
       message({ kind: 'subscribe', topic: 'a', from: 'client' })
     )
+    expect(changes).toEqual([{ owner: channel, attachment }])
+    expect(attachment.topics).toEqual(new Set(['a']))
+
+    changes.length = 0
+    broker.handleMessage(
+      channel,
+      message({ kind: 'subscribe', topic: 'a', from: 'client' })
+    )
+    expect(changes).toEqual([])
+
     broker.handleMessage(
       channel,
       message({ kind: 'subscribe', topic: 'b', from: 'client' })
     )
+    expect(changes).toEqual([{ owner: channel, attachment }])
     expect(attachment.topics).toEqual(new Set(['a', 'b']))
 
+    changes.length = 0
     broker.handleMessage(
       channel,
       message({ kind: 'unsubscribe', topic: 'a', from: 'client' })
     )
+    expect(changes).toEqual([{ owner: channel, attachment }])
     expect(attachment.topics).toEqual(new Set(['b']))
+
+    changes.length = 0
+    broker.handleMessage(
+      channel,
+      message({ kind: 'unsubscribe', topic: 'a', from: 'client' })
+    )
+    expect(changes).toEqual([])
+
+    broker.deleteChannel(channel)
+    expect(changes).toEqual([])
   })
 
   it('throws when the same channel is added twice', () => {

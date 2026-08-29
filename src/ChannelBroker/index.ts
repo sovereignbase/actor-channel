@@ -143,13 +143,20 @@ export class ChannelBroker<
     ////////////////
 
     if (ctx?.kind === 'subscribe') {
+      void this.subscribeTopic(sender, ctx.topic)
+
       const attachment = this.channelAttachments.get(sender)
       if (attachment) {
         attachment.topics ??= new Set()
-        void attachment.topics.add(ctx.topic)
+        if (!attachment.topics.has(ctx.topic)) {
+          void attachment.topics.add(ctx.topic)
+          void this.dispatchEvent('attachment', {
+            owner: sender,
+            attachment,
+          })
+        }
       }
 
-      void this.subscribeTopic(sender, ctx.topic)
       const subscribers = this.topicSubscribers.get(ctx.topic)!
       const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
         kind: 'subscribe',
@@ -177,8 +184,6 @@ export class ChannelBroker<
           description: 'Unauthorized.',
         })
 
-      void this.channelAttachments.get(sender)?.topics?.delete(ctx.topic)
-
       const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
         kind: 'unsubscribe',
         topic: ctx.topic,
@@ -188,7 +193,15 @@ export class ChannelBroker<
       for (const channel of subscribers.values()) {
         void channel.send(buffer)
       }
-      return void this.unsubscribeTopic(sender, ctx.topic)
+
+      void this.unsubscribeTopic(sender, ctx.topic)
+      const attachment = this.channelAttachments.get(sender)
+      if (attachment?.topics?.delete(ctx.topic))
+        void this.dispatchEvent('attachment', {
+          owner: sender,
+          attachment,
+        })
+      return
     }
 
     return void this.dispatchEvent('violation', {
@@ -228,8 +241,11 @@ export class ChannelBroker<
     return
   }
   private dispatchEvent<
-    K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,
-  >(type: K, detail: ChannelBrokerEventMap<RPCRequest, RPCResponse>[K]): void {
+    K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse, Topic>,
+  >(
+    type: K,
+    detail: ChannelBrokerEventMap<RPCRequest, RPCResponse, Topic>[K]
+  ): void {
     return void this.eventTarget.dispatchEvent(
       new CustomEvent(type, { detail })
     )
@@ -243,10 +259,15 @@ export class ChannelBroker<
    * @param options - The event listener options.
    */
   public addEventListener<
-    K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,
+    K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse, Topic>,
   >(
     type: K,
-    listener: ChannelBrokerEventListenerFor<RPCRequest, RPCResponse, K> | null,
+    listener: ChannelBrokerEventListenerFor<
+      RPCRequest,
+      RPCResponse,
+      K,
+      Topic
+    > | null,
     options?: boolean | AddEventListenerOptions
   ): void {
     return void this.eventTarget.addEventListener(
@@ -264,10 +285,15 @@ export class ChannelBroker<
    * @param options - The event listener options.
    */
   public removeEventListener<
-    K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,
+    K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse, Topic>,
   >(
     type: K,
-    listener: ChannelBrokerEventListenerFor<RPCRequest, RPCResponse, K> | null,
+    listener: ChannelBrokerEventListenerFor<
+      RPCRequest,
+      RPCResponse,
+      K,
+      Topic
+    > | null,
     options?: boolean | EventListenerOptions
   ): void {
     return void this.eventTarget.removeEventListener(
