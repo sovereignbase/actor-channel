@@ -16,8 +16,8 @@ const publisher = channel()
 const subscriber = channel()
 const outsider = channel()
 
-broker.addChannel(publisher, false, ['topic'])
-broker.addChannel(subscriber, false, ['topic'])
+broker.addChannel(publisher, { topics: new Set(['topic']) })
+broker.addChannel(subscriber, { topics: new Set(['topic']) })
 broker.handleMessage(
   publisher,
   frame({ kind: 'publish', topic: 'topic', from: 'client', detail: 'hello' })

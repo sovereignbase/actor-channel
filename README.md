@@ -74,7 +74,7 @@ broker.addEventListener('request', (event) => {
   respond({ result: request.method })
 })
 
-broker.addChannel(socket, true)
+broker.addChannel(socket, { rpcEnabled: true })
 
 socket.addEventListener('message', (event) => {
   broker.handleMessage(socket, event.data)
@@ -102,12 +102,12 @@ The transport passed to `ChannelBroker` must expose `send(ArrayBuffer)` and
 
 ### `ChannelBroker`
 
-- `addChannel(channel, rpcEnabled?, topics?)` adds a transport and optional
-  initial subscriptions.
+- `addChannel(channel, attachment?)` adds a transport with optional metadata,
+  RPC access, and initial subscriptions.
 - `deleteChannel(channel)` removes a transport and its subscriptions.
 - `handleMessage(channel, message)` handles an encoded client message.
 - `request` events receive the request and a response callback.
-- `violation` events receive a protocol violation description.
+- `violation` events receive the violating channel and a description.
 
 ## Behavior
 

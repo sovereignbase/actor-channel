@@ -14,22 +14,70 @@
 <a href="https://codecov.io/gh/sovereignbase/actor-channel"><img src="https://codecov.io/gh/sovereignbase/actor-channel/branch/master/graph/badge.svg" alt="codecov"></a>
 <a href="LICENSE"><img src="https://img.shields.io/npm/l/@sovereignbase/actor-channel" alt="license"></a></p>
 <h1 id="actor-channel" class="tsd-anchor-link">actor-channel<a href="#actor-channel" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1>
-<p>Client ▣ ActorChannel ⇄ ChannelBroker ☷ Server</p>
+<p>Bidirectional actor channels with pub/sub, peer relaying, and RPC.</p>
 <h2 id="installation" class="tsd-anchor-link">Installation<a href="#installation" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<pre><code class="sh"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">install</span><span class="hl-1"> </span><span class="hl-2">@sovereignbase/actor-channel</span><br/><span class="hl-3"># or</span><br/><span class="hl-0">pnpm</span><span class="hl-1"> </span><span class="hl-2">add</span><span class="hl-1"> </span><span class="hl-2">@sovereignbase/actor-channel</span><br/><span class="hl-3"># or</span><br/><span class="hl-0">yarn</span><span class="hl-1"> </span><span class="hl-2">add</span><span class="hl-1"> </span><span class="hl-2">@sovereignbase/actor-channel</span><br/><span class="hl-3"># or</span><br/><span class="hl-0">bun</span><span class="hl-1"> </span><span class="hl-2">add</span><span class="hl-1"> </span><span class="hl-2">@sovereignbase/actor-channel</span><br/><span class="hl-3"># or</span><br/><span class="hl-0">deno</span><span class="hl-1"> </span><span class="hl-2">add</span><span class="hl-1"> </span><span class="hl-2">jsr:@sovereignbase/actor-channel</span><br/><span class="hl-3"># or</span><br/><span class="hl-0">vlt</span><span class="hl-1"> </span><span class="hl-2">install</span><span class="hl-1"> </span><span class="hl-2">jsr:@sovereignbase/actor-channel</span>
+</code><button type="button">Copy</button></pre>
+
 <h2 id="usage" class="tsd-anchor-link">Usage<a href="#usage" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<h3 id="actor-channel-1" class="tsd-anchor-link">Actor channel<a href="#actor-channel-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<pre><code class="ts"><span class="hl-4">import</span><span class="hl-1"> { </span><span class="hl-5">ActorChannel</span><span class="hl-1"> } </span><span class="hl-4">from</span><span class="hl-1"> </span><span class="hl-2">&#39;@sovereignbase/actor-channel&#39;</span><br/><br/><span class="hl-6">const</span><span class="hl-1"> </span><span class="hl-7">channel</span><span class="hl-1"> = </span><span class="hl-6">new</span><span class="hl-1"> </span><span class="hl-5">ActorChannel</span><span class="hl-1">&lt;</span><br/><span class="hl-1">  </span><span class="hl-2">&#39;documents&#39;</span><span class="hl-1">,</span><br/><span class="hl-1">  { </span><span class="hl-8">id</span><span class="hl-1">: </span><span class="hl-5">string</span><span class="hl-1"> },</span><br/><span class="hl-1">  { </span><span class="hl-8">method</span><span class="hl-1">: </span><span class="hl-5">string</span><span class="hl-1"> },</span><br/><span class="hl-1">  { </span><span class="hl-8">result</span><span class="hl-1">: </span><span class="hl-5">string</span><span class="hl-1"> }</span><br/><span class="hl-1">&gt;()</span><br/><br/><span class="hl-5">channel</span><span class="hl-1">.</span><span class="hl-0">addEventListener</span><span class="hl-1">(</span><span class="hl-2">&#39;message&#39;</span><span class="hl-1">, (</span><span class="hl-5">event</span><span class="hl-1">) </span><span class="hl-6">=&gt;</span><span class="hl-1"> {</span><br/><span class="hl-1">  </span><span class="hl-6">const</span><span class="hl-1"> [</span><span class="hl-7">topic</span><span class="hl-1">, </span><span class="hl-7">message</span><span class="hl-1">] = </span><span class="hl-5">event</span><span class="hl-1">.</span><span class="hl-5">detail</span><br/><span class="hl-1">  </span><span class="hl-5">console</span><span class="hl-1">.</span><span class="hl-0">log</span><span class="hl-1">(</span><span class="hl-5">topic</span><span class="hl-1">, </span><span class="hl-5">message</span><span class="hl-1">)</span><br/><span class="hl-1">})</span><br/><br/><span class="hl-5">channel</span><span class="hl-1">.</span><span class="hl-0">addEventListener</span><span class="hl-1">(</span><span class="hl-2">&#39;response&#39;</span><span class="hl-1">, (</span><span class="hl-5">event</span><span class="hl-1">) </span><span class="hl-6">=&gt;</span><span class="hl-1"> {</span><br/><span class="hl-1">  </span><span class="hl-6">const</span><span class="hl-1"> [</span><span class="hl-7">id</span><span class="hl-1">, </span><span class="hl-7">response</span><span class="hl-1">] = </span><span class="hl-5">event</span><span class="hl-1">.</span><span class="hl-5">detail</span><br/><span class="hl-1">  </span><span class="hl-5">console</span><span class="hl-1">.</span><span class="hl-0">log</span><span class="hl-1">(</span><span class="hl-5">id</span><span class="hl-1">, </span><span class="hl-5">response</span><span class="hl-1">)</span><br/><span class="hl-1">})</span><br/><br/><span class="hl-5">channel</span><span class="hl-1">.</span><span class="hl-0">subscribe</span><span class="hl-1">(</span><span class="hl-2">&#39;documents&#39;</span><span class="hl-1">)</span><br/><span class="hl-5">channel</span><span class="hl-1">.</span><span class="hl-0">publish</span><span class="hl-1">(</span><span class="hl-2">&#39;documents&#39;</span><span class="hl-1">, { </span><span class="hl-5">id:</span><span class="hl-1"> </span><span class="hl-2">&#39;document-1&#39;</span><span class="hl-1"> })</span><br/><br/><span class="hl-6">const</span><span class="hl-1"> </span><span class="hl-7">requestId</span><span class="hl-1"> = </span><span class="hl-5">channel</span><span class="hl-1">.</span><span class="hl-0">request</span><span class="hl-1">({ </span><span class="hl-5">method:</span><span class="hl-1"> </span><span class="hl-2">&#39;sync&#39;</span><span class="hl-1"> })</span><br/><span class="hl-5">console</span><span class="hl-1">.</span><span class="hl-0">log</span><span class="hl-1">(</span><span class="hl-5">requestId</span><span class="hl-1">)</span><br/><br/><span class="hl-6">void</span><span class="hl-1"> </span><span class="hl-5">channel</span><span class="hl-1">.</span><span class="hl-0">addBroker</span><span class="hl-1">(</span><span class="hl-2">&#39;wss://broker.example&#39;</span><span class="hl-1">, </span><span class="hl-6">true</span><span class="hl-1">)</span>
+</code><button type="button">Copy</button></pre>
+
+<h3 id="broker" class="tsd-anchor-link">Broker<a href="#broker" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<pre><code class="ts"><span class="hl-4">import</span><span class="hl-1"> { </span><span class="hl-5">ChannelBroker</span><span class="hl-1"> } </span><span class="hl-4">from</span><span class="hl-1"> </span><span class="hl-2">&#39;@sovereignbase/actor-channel&#39;</span><br/><br/><span class="hl-6">const</span><span class="hl-1"> </span><span class="hl-7">broker</span><span class="hl-1"> = </span><span class="hl-6">new</span><span class="hl-1"> </span><span class="hl-5">ChannelBroker</span><span class="hl-1">&lt;</span><br/><span class="hl-1">  </span><span class="hl-2">&#39;documents&#39;</span><span class="hl-1">,</span><br/><span class="hl-1">  { </span><span class="hl-8">id</span><span class="hl-1">: </span><span class="hl-5">string</span><span class="hl-1"> },</span><br/><span class="hl-1">  { </span><span class="hl-8">method</span><span class="hl-1">: </span><span class="hl-5">string</span><span class="hl-1"> },</span><br/><span class="hl-1">  { </span><span class="hl-8">result</span><span class="hl-1">: </span><span class="hl-5">string</span><span class="hl-1"> }</span><br/><span class="hl-1">&gt;()</span><br/><br/><span class="hl-5">broker</span><span class="hl-1">.</span><span class="hl-0">addEventListener</span><span class="hl-1">(</span><span class="hl-2">&#39;request&#39;</span><span class="hl-1">, (</span><span class="hl-5">event</span><span class="hl-1">) </span><span class="hl-6">=&gt;</span><span class="hl-1"> {</span><br/><span class="hl-1">  </span><span class="hl-6">const</span><span class="hl-1"> [</span><span class="hl-7">request</span><span class="hl-1">, </span><span class="hl-7">respond</span><span class="hl-1">] = </span><span class="hl-5">event</span><span class="hl-1">.</span><span class="hl-5">detail</span><br/><span class="hl-1">  </span><span class="hl-0">respond</span><span class="hl-1">({ </span><span class="hl-5">result:</span><span class="hl-1"> </span><span class="hl-5">request</span><span class="hl-1">.</span><span class="hl-5">method</span><span class="hl-1"> })</span><br/><span class="hl-1">})</span><br/><br/><span class="hl-5">broker</span><span class="hl-1">.</span><span class="hl-0">addChannel</span><span class="hl-1">(</span><span class="hl-5">socket</span><span class="hl-1">, { </span><span class="hl-5">rpcEnabled:</span><span class="hl-1"> </span><span class="hl-6">true</span><span class="hl-1"> })</span><br/><br/><span class="hl-5">socket</span><span class="hl-1">.</span><span class="hl-0">addEventListener</span><span class="hl-1">(</span><span class="hl-2">&#39;message&#39;</span><span class="hl-1">, (</span><span class="hl-5">event</span><span class="hl-1">) </span><span class="hl-6">=&gt;</span><span class="hl-1"> {</span><br/><span class="hl-1">  </span><span class="hl-5">broker</span><span class="hl-1">.</span><span class="hl-0">handleMessage</span><span class="hl-1">(</span><span class="hl-5">socket</span><span class="hl-1">, </span><span class="hl-5">event</span><span class="hl-1">.</span><span class="hl-5">data</span><span class="hl-1">)</span><br/><span class="hl-1">})</span><br/><br/><span class="hl-5">socket</span><span class="hl-1">.</span><span class="hl-0">addEventListener</span><span class="hl-1">(</span><span class="hl-2">&#39;close&#39;</span><span class="hl-1">, () </span><span class="hl-6">=&gt;</span><span class="hl-1"> {</span><br/><span class="hl-1">  </span><span class="hl-5">broker</span><span class="hl-1">.</span><span class="hl-0">deleteChannel</span><span class="hl-1">(</span><span class="hl-5">socket</span><span class="hl-1">)</span><br/><span class="hl-1">})</span>
+</code><button type="button">Copy</button></pre>
+
+<p>The transport passed to <code>ChannelBroker</code> must expose <code>send(ArrayBuffer)</code> and
+<code>readyState</code>. Incoming messages must be provided as <code>ArrayBuffer</code> values.</p>
 <h2 id="api" class="tsd-anchor-link">API<a href="#api" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<h3 id="_" class="tsd-anchor-link"><code>ActorChannel</code><a href="#_" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul>
+<li><code>rpcAvailable</code> reports whether an RPC-enabled broker is available.</li>
+<li><code>request(detail)</code> sends a fire-and-forget RPC request and returns its ID.</li>
+<li><code>publish(topic, detail)</code> publishes locally and to subscribed broker peers.</li>
+<li><code>subscribe(topic)</code> subscribes the current window to a topic.</li>
+<li><code>unsubscribe(topic)</code> removes the current window's subscription.</li>
+<li><code>addBroker(url, rpcEnabled?)</code> repeatedly attempts to acquire a URL-specific
+Web Lock and maintains the WebSocket while it owns the lock.</li>
+</ul>
+<h3 id="_-1" class="tsd-anchor-link"><code>ChannelBroker</code><a href="#_-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul>
+<li><code>addChannel(channel, attachment?)</code> adds a transport with optional metadata,
+RPC access, and initial subscriptions.</li>
+<li><code>deleteChannel(channel)</code> removes a transport and its subscriptions.</li>
+<li><code>handleMessage(channel, message)</code> handles an encoded client message.</li>
+<li><code>request</code> events receive the request and a response callback.</li>
+<li><code>violation</code> events receive the violating channel and a description.</li>
+</ul>
 <h2 id="behavior" class="tsd-anchor-link">Behavior<a href="#behavior" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
-<p><code>invoke</code>, <code>gossip</code>, <code>subscribe</code>, and <code>unsubscribe</code> return whether the operation
-was accepted while the shared upstream connection was online. A <code>true</code> value is
-not a server acknowledgement.</p>
-<p>Pending requests are rejected with a <code>NetworkError</code> when the upstream
-connection changes and are not replayed automatically. The server may already
-have processed a request whose response was lost, so mutating operations
-should be idempotent.</p>
-<p>The client emits <code>online</code> when the shared WebSocket opens and <code>offline</code> when
-that connection is lost.</p>
+<ul>
+<li><code>ActorChannel</code> is window-only and requires Broadcast Channel, Web Locks, Web
+Crypto, and WebSocket APIs.</li>
+<li>Same-origin tabs share topic subscription counts and elect at most one
+connection to each broker URL.</li>
+<li>Broker connections are retried every 10 seconds after closing or when their
+Web Lock is unavailable.</li>
+<li>Topic subscriptions are forwarded to brokers on the first local subscription
+and removed after the final local unsubscription.</li>
+<li>Requests are not queued or replayed when no RPC-enabled connection is open.</li>
+<li><code>rpcAvailable</code> is <code>true</code> when the channel knows of at least one open
+RPC-enabled broker WebSocket.</li>
+<li>Protocol messages are MessagePack-encoded <code>ArrayBuffer</code> values.</li>
+<li><code>ChannelBroker</code> uses standard web platform primitives and does not require a
+specific server framework.</li>
+</ul>
 <h2 id="tests" class="tsd-anchor-link">Tests<a href="#tests" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<ul>
+<li>Unit and integration tests in Vitest with 100% statement, branch, function,
+and line coverage.</li>
+<li>Browser E2E tests in Chromium, Firefox, WebKit, Mobile Chromium, Mobile
+Firefox, and Mobile WebKit.</li>
+<li><code>ChannelBroker</code> runtime tests in Node.js, Bun, Deno, Vercel Edge Runtime, and
+Cloudflare Workers (<code>workerd</code>).</li>
+</ul>
 <h2 id="license" class="tsd-anchor-link">License<a href="#license" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Apache-2.0</p>
 </div></div>
 <div class="col-sidebar">
 <div class="page-menu">
@@ -49,7 +97,15 @@ that connection is lost.</p>
 <ul>
 <li><a href="#installation"><span>Installation</span></a></li>
 <li><a href="#usage"><span>Usage</span></a></li>
+<li>
+<ul>
+<li><a href="#actor-channel-1"><span>Actor channel</span></a></li>
+<li><a href="#broker"><span>Broker</span></a></li></ul></li>
 <li><a href="#api"><span>API</span></a></li>
+<li>
+<ul>
+<li><a href="#_"><span></span></a></li>
+<li><a href="#_-1"><span></span></a></li></ul></li>
 <li><a href="#behavior"><span>Behavior</span></a></li>
 <li><a href="#tests"><span>Tests</span></a></li>
 <li><a href="#license"><span>License</span></a></li></ul></div></details></div>

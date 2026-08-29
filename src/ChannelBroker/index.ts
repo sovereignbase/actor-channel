@@ -1,6 +1,8 @@
+import { ActorChannel } from '../ActorChannel/index.js'
 import type {
   Context,
   ActorChannelPair,
+  ChannelAttachment,
   ChannelBrokerEventMap,
   ChannelBrokerEventListenerFor,
 } from '../types/index.js'
@@ -22,28 +24,34 @@ export class ChannelBroker<
 > {
   private readonly eventTarget: EventTarget = new EventTarget()
   ///
+  private readonly rpcEnabled: Set<ActorChannelPair> = new Set()
+  ///
   private readonly topicSubscribers: Map<string, Set<ActorChannelPair>> =
     new Map()
   ///
-  private readonly rpcEnabled: Set<ActorChannelPair> = new Set()
-  ///
+  /** Attachments associated with the broker's channels. */
+  public readonly channelAttachments: Map<
+    ActorChannelPair,
+    ChannelAttachment<Topic>
+  > = new Map()
 
   /**
    * Adds a channel to the broker.
    *
    * @param channel - The channel transport to add.
-   * @param rpcEnabled - Whether the channel may issue RPC requests.
-   * @param topics - The topics initially subscribed by the channel.
+   * @param attachment - Channel metadata, RPC access, and initial topics.
    */
   addChannel(
     channel: ActorChannelPair,
-    rpcEnabled: boolean = false,
-    topics?: Array<string>
+    attachment: ChannelAttachment<Topic> = {}
   ): void {
-    if (rpcEnabled) void this.rpcEnabled.add(channel)
+    if (this.channelAttachments.has(channel))
+      throw new Error('addChannel MUST be used only once per channel.')
+    if (attachment.rpcEnabled) void this.rpcEnabled.add(channel)
+    void this.channelAttachments.set(channel, attachment)
 
-    if (!topics) return
-    for (const topic of topics)
+    if (!attachment.topics) return
+    for (const topic of attachment.topics)
       void this.handleSubscription(channel, 'subscribe', topic)
     return
   }
@@ -54,13 +62,13 @@ export class ChannelBroker<
    * @param channel - The channel transport to remove.
    */
   deleteChannel(channel: ActorChannelPair): void {
+    const channelAttachment = this.channelAttachments.get(channel)
     void this.rpcEnabled.delete(channel)
+    void this.channelAttachments.delete(channel)
+    if (!channelAttachment || !channelAttachment.topics) return
+    for (const topic of channelAttachment.topics)
+      void this.handleSubscription(channel, 'unsubscribe', topic)
 
-    for (const [topic, subscribers] of this.topicSubscribers) {
-      if (subscribers.has(channel))
-        void this.handleSubscription(channel, 'unsubscribe', topic)
-      if (subscribers.size < 1) void this.topicSubscribers.delete(topic)
-    }
     return
   }
 
@@ -77,7 +85,10 @@ export class ChannelBroker<
       if (!(message instanceof ArrayBuffer)) throw null
       ctx = decode(message) as Context<Topic, Message, RPCRequest, RPCResponse>
     } catch {
-      return void this.dispatchEvent('violation', 'Wrong message encoding.')
+      return void this.dispatchEvent('violation', {
+        violator: sender,
+        description: 'Wrong message encoding.',
+      })
     }
 
     ////////////////
@@ -85,7 +96,10 @@ export class ChannelBroker<
     //////////////
     if (ctx?.kind === 'request') {
       if (!this.rpcEnabled.has(sender))
-        return void this.dispatchEvent('violation', 'Unauthorized.')
+        return void this.dispatchEvent('violation', {
+          violator: sender,
+          description: 'Unauthorized.',
+        })
 
       return void this.dispatchEvent('request', [
         ctx.detail as RPCRequest,
@@ -129,6 +143,12 @@ export class ChannelBroker<
     ////////////////
 
     if (ctx?.kind === 'subscribe') {
+      const attachment = this.channelAttachments.get(sender)
+      if (attachment) {
+        attachment.topics ??= new Set()
+        void attachment.topics.add(ctx.topic)
+      }
+
       void this.subscribeTopic(sender, ctx.topic)
       const subscribers = this.topicSubscribers.get(ctx.topic)!
       const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
@@ -149,8 +169,16 @@ export class ChannelBroker<
 
     if (ctx?.kind === 'unsubscribe') {
       const subscribers = this.topicSubscribers.get(ctx.topic)
+
+      // Only allow subscribers to unsubscribe otherwise subscription counters could be manipulated.
       if (!subscribers?.has(sender))
-        return void this.dispatchEvent('violation', 'Unauthorized.')
+        return void this.dispatchEvent('violation', {
+          violator: sender,
+          description: 'Unauthorized.',
+        })
+
+      void this.channelAttachments.get(sender)?.topics?.delete(ctx.topic)
+
       const buffer = encode<Context<Topic, Message, RPCRequest, RPCResponse>>({
         kind: 'unsubscribe',
         topic: ctx.topic,
@@ -163,7 +191,10 @@ export class ChannelBroker<
       return void this.unsubscribeTopic(sender, ctx.topic)
     }
 
-    return
+    return void this.dispatchEvent('violation', {
+      violator: sender,
+      description: 'Off protocol.',
+    })
   }
 
   //    //  //////  //      ////    //////  ////      /////
@@ -192,7 +223,9 @@ export class ChannelBroker<
   private unsubscribeTopic(subscriber: ActorChannelPair, topic: string): void {
     const subscribers = this.topicSubscribers.get(topic)
     if (!subscribers) return
-    else return void subscribers.delete(subscriber)
+    else void subscribers.delete(subscriber)
+    if (subscribers.size < 1) void this.topicSubscribers.delete(topic)
+    return
   }
   private dispatchEvent<
     K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse>,

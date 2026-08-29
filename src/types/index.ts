@@ -124,7 +124,10 @@ export type ActorChannelEventListenerFor<
  */
 export type ChannelBrokerEventMap<RPCRequest, RPCResponse> = {
   /** A protocol violation description. */
-  violation: string
+  violation: {
+    violator: ActorChannelPair
+    description: 'Wrong message encoding.' | 'Off protocol.' | 'Unauthorized.'
+  }
   /** An RPC request and the callback used to send its response. */
   request: [RPCRequest, (response: RPCResponse) => void]
 }
@@ -175,4 +178,14 @@ export type ActorChannelPair = {
   send: (data: ArrayBuffer) => void
   /** The current transport ready state. */
   readyState: number
+}
+
+/** Metadata and broker state associated with a channel. */
+export type ChannelAttachment<Topic> = {
+  /** The channel's IP address. */
+  ipAddress?: string
+  /** Whether the channel may issue RPC requests. */
+  rpcEnabled?: boolean
+  /** Topics currently subscribed by the channel. */
+  topics?: Set<Topic>
 }

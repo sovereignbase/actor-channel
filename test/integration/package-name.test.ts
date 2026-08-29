@@ -26,9 +26,18 @@ describe('ChannelBroker', () => {
   it('reports malformed messages and unauthorized RPC requests', () => {
     const broker = new ChannelBroker<string, unknown, string, string>()
     const channel = new TestChannel()
-    const violations: string[] = []
-    const listener = (event: CustomEvent<string>) =>
+    const violations: Array<{
+      violator: ActorChannelPair
+      description: string
+    }> = []
+    const listener = (
+      event: CustomEvent<{
+        violator: ActorChannelPair
+        description: string
+      }>
+    ) => {
       violations.push(event.detail)
+    }
     broker.addEventListener('violation', listener)
     broker.handleMessage(channel, new Uint8Array([1]) as unknown as ArrayBuffer)
     broker.handleMessage(channel, new Uint8Array([0xc1]).buffer)
@@ -39,9 +48,9 @@ describe('ChannelBroker', () => {
     broker.removeEventListener('violation', listener)
     broker.handleMessage(channel, new Uint8Array([0xc1]).buffer)
     expect(violations).toEqual([
-      'Wrong message encoding.',
-      'Wrong message encoding.',
-      'Unauthorized.',
+      { violator: channel, description: 'Wrong message encoding.' },
+      { violator: channel, description: 'Wrong message encoding.' },
+      { violator: channel, description: 'Unauthorized.' },
     ])
   })
 
@@ -49,7 +58,7 @@ describe('ChannelBroker', () => {
     const broker = new ChannelBroker<string, unknown, string, string>()
     const channel = new TestChannel()
     const requests: string[] = []
-    broker.addChannel(channel, true)
+    broker.addChannel(channel, { rpcEnabled: true })
     broker.addEventListener('request', (event) => {
       const [request, respond] = event.detail
       requests.push(request)
@@ -155,9 +164,13 @@ describe('ChannelBroker', () => {
     expect((broker as any).topicSubscribers.size).toBe(0)
   })
 
-  it('ignores unknown topics and message kinds', () => {
+  it('reports unknown topics and message kinds without sending frames', () => {
     const broker = new ChannelBroker<string, unknown, string, string>()
     const channel = new TestChannel()
+    const violations: string[] = []
+    broker.addEventListener('violation', (event) => {
+      violations.push(event.detail.description)
+    })
     broker.handleMessage(
       channel,
       message({
@@ -174,6 +187,7 @@ describe('ChannelBroker', () => {
     broker.handleMessage(channel, message({ kind: 'unknown' }))
     broker.deleteChannel(channel)
     expect(channel.send).not.toHaveBeenCalled()
+    expect(violations).toEqual(['Unauthorized.', 'Off protocol.'])
   })
 
   it('does not advertise a lower amount for a non-subscriber unsubscribe', () => {
@@ -196,29 +210,64 @@ describe('ChannelBroker', () => {
   it('applies initial addChannel topics through the subscription protocol', () => {
     const broker = new ChannelBroker<string, unknown, string, string>()
     const channel = new TestChannel()
-    broker.addChannel(channel, false, ['a'])
+    broker.addChannel(channel, { topics: new Set(['a']) })
     expect(decoded(channel)).toEqual([
       { kind: 'subscribe', topic: 'a', from: 'server', amount: 1 },
     ])
+  })
+
+  it('keeps attachment topics synchronized with subscription messages', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    const attachment: { ipAddress: string; topics?: Set<string> } = {
+      ipAddress: '192.0.2.1',
+    }
+    broker.addChannel(channel, attachment)
+
+    expect(broker.channelAttachments.get(channel)).toBe(attachment)
+    expect(attachment.topics).toBeUndefined()
+
+    broker.handleMessage(
+      channel,
+      message({ kind: 'subscribe', topic: 'a', from: 'client' })
+    )
+    broker.handleMessage(
+      channel,
+      message({ kind: 'subscribe', topic: 'b', from: 'client' })
+    )
+    expect(attachment.topics).toEqual(new Set(['a', 'b']))
+
+    broker.handleMessage(
+      channel,
+      message({ kind: 'unsubscribe', topic: 'a', from: 'client' })
+    )
+    expect(attachment.topics).toEqual(new Set(['b']))
+  })
+
+  it('throws when the same channel is added twice', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    const attachment = { ipAddress: '192.0.2.1' }
+    broker.addChannel(channel, attachment)
+
+    expect(() => broker.addChannel(channel)).toThrow(
+      'addChannel MUST be used only once per channel.'
+    )
+    expect(broker.channelAttachments.get(channel)).toBe(attachment)
   })
 
   it('notifies subscribers when deleteChannel removes a channel', () => {
     const broker = new ChannelBroker<string, unknown, string, string>()
     const first = new TestChannel()
     const second = new TestChannel()
-    broker.handleMessage(
-      first,
-      message({ kind: 'subscribe', topic: 'a', from: 'client' })
-    )
-    broker.handleMessage(
-      second,
-      message({ kind: 'subscribe', topic: 'a', from: 'client' })
-    )
+    broker.addChannel(first, { topics: new Set(['a']) })
+    broker.addChannel(second, { topics: new Set(['a']) })
     first.send.mockClear()
     broker.deleteChannel(second)
     expect(decoded(first)).toEqual([
       { kind: 'unsubscribe', topic: 'a', from: 'server', amount: 1 },
     ])
+    expect(broker.channelAttachments.has(second)).toBe(false)
   })
 
   it('cleans an empty topic and tolerates a direct unknown removal', () => {
