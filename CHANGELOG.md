@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/sovereignbase/actor-channel/compare/v1.0.1...v1.1.0) (2026-08-29)
+
+
+### Features
+
+* track channel attachments ([90aad58](https://github.com/sovereignbase/actor-channel/commit/90aad58e031c3124bc5cf30b8a3033097b0441c6))
+
 ## [1.0.1](https://github.com/sovereignbase/actor-channel/compare/v1.0.0...v1.0.1) (2026-08-28)
 
 
