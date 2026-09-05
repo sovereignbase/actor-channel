@@ -116,6 +116,7 @@ export class ChannelBroker<
             }).slice().buffer
           )
         },
+        sender,
       ])
     }
 
@@ -240,7 +241,17 @@ export class ChannelBroker<
     if (subscribers.size < 1) void this.topicSubscribers.delete(topic)
     return
   }
-  private dispatchEvent<
+
+  /**
+   * Dispatches a broker event to registered listeners.
+   *
+   * Request handlers can use this to report application-level protocol
+   * violations associated with the request sender.
+   *
+   * @param type - The event type.
+   * @param detail - The event payload.
+   */
+  public dispatchEvent<
     K extends keyof ChannelBrokerEventMap<RPCRequest, RPCResponse, Topic>,
   >(
     type: K,

@@ -70,7 +70,16 @@ const broker = new ChannelBroker<
 >()
 
 broker.addEventListener('request', (event) => {
-  const [request, respond] = event.detail
+  const [request, respond, sender] = event.detail
+
+  if (!request.method) {
+    broker.dispatchEvent('violation', {
+      violator: sender,
+      description: 'Off protocol.',
+    })
+    return
+  }
+
   respond({ result: request.method })
 })
 
@@ -106,8 +115,10 @@ The transport passed to `ChannelBroker` must expose `send(ArrayBuffer)` and
   RPC access, and initial subscriptions.
 - `deleteChannel(channel)` removes a transport and its subscriptions.
 - `handleMessage(channel, message)` handles an encoded client message.
+- `dispatchEvent(type, detail)` dispatches a typed broker event to registered
+  listeners.
 - `attachment` events receive the channel and its updated attachment.
-- `request` events receive the request and a response callback.
+- `request` events receive the request, a response callback, and the sender.
 - `violation` events receive the violating channel and a description.
 
 ## Behavior

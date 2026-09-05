@@ -64,8 +64,9 @@ describe('ChannelBroker', () => {
     const requests: string[] = []
     broker.addChannel(channel, { rpcEnabled: true })
     broker.addEventListener('request', (event) => {
-      const [request, respond] = event.detail
+      const [request, respond, sender] = event.detail
       requests.push(request)
+      expect(sender).toBe(channel)
       respond('ok')
       channel.readyState = WebSocket.CLOSED
       respond('ignored')
@@ -77,6 +78,35 @@ describe('ChannelBroker', () => {
     expect(requests).toEqual(['run'])
     expect(decoded(channel)).toEqual([
       { kind: 'response', id: '1', detail: 'ok' },
+    ])
+  })
+
+  it('lets request handlers dispatch violations for the sender', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    const violations: Array<{
+      violator: ActorChannelPair
+      description: string
+    }> = []
+    broker.addChannel(channel, { rpcEnabled: true })
+    broker.addEventListener('violation', (event) => {
+      violations.push(event.detail)
+    })
+    broker.addEventListener('request', (event) => {
+      const [, , sender] = event.detail
+      broker.dispatchEvent('violation', {
+        violator: sender,
+        description: 'Off protocol.',
+      })
+    })
+
+    broker.handleMessage(
+      channel,
+      message({ kind: 'request', id: '1', detail: 'invalid' })
+    )
+
+    expect(violations).toEqual([
+      { violator: channel, description: 'Off protocol.' },
     ])
   })
 

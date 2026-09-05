@@ -134,8 +134,12 @@ export type ChannelBrokerEventMap<RPCRequest, RPCResponse, Topic = string> = {
     violator: ActorChannelPair
     description: 'Wrong message encoding.' | 'Off protocol.' | 'Unauthorized.'
   }
-  /** An RPC request and the callback used to send its response. */
-  request: [RPCRequest, (response: RPCResponse) => void]
+  /** An RPC request, its response callback, and the channel that sent it. */
+  request: [
+    request: RPCRequest,
+    respond: (response: RPCResponse) => void,
+    sender: ActorChannelPair,
+  ]
 }
 
 /**
