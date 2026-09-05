@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/sovereignbase/actor-channel/compare/v1.2.0...v1.3.0) (2026-09-05)
+
+
+### Features
+
+* expose broker request sender ([e488755](https://github.com/sovereignbase/actor-channel/commit/e48875515022b9bf62ac883cb9f1ac6729f69a50))
+
 ## [1.2.0](https://github.com/sovereignbase/actor-channel/compare/v1.1.0...v1.2.0) (2026-08-29)
 
 
