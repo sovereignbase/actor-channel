@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/sovereignbase/actor-channel/compare/v1.4.0...v1.5.0) (2026-09-06)
+
+
+### Features
+
+* add challenge prop to challenge attachment type for storing auth challenges ([1431366](https://github.com/sovereignbase/actor-channel/commit/1431366e900c9eba386f7d5757e66fb816359cbb))
+
 ## [1.4.0](https://github.com/sovereignbase/actor-channel/compare/v1.3.0...v1.4.0) (2026-09-06)
 
 
