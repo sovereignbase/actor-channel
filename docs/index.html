@@ -48,7 +48,7 @@ RPC access, and initial subscriptions.</li>
 <li><code>deleteChannel(channel)</code> removes a transport and its subscriptions.</li>
 <li><code>markAuthenticated(channel)</code> records that the host application has verified
 the channel's application-level identity and emits an <code>attachment</code> event.
-Authentication is intentionally one-way for the lifetime of the attachment.</li>
+The method is intentionally one-way and provides no unset operation.</li>
 <li><code>handleMessage(channel, message)</code> handles an encoded client message.</li>
 <li><code>dispatchEvent(type, detail)</code> dispatches a typed broker event to registered
 listeners.</li>

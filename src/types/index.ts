@@ -202,6 +202,8 @@ export type ActorChannelPair = {
 export type ChannelAttachment<Topic> = {
   /** Whether the host authenticated the channel's application-level identity. */
   authenticated?: boolean
+  /** Lets you temporarily store an authentication challenge. */
+  challenge?: Uint8Array
   /** The channel's IP address, managed by the host. */
   ipAddress?: string
   /** Whether the channel may issue RPC requests, managed automatically. */
