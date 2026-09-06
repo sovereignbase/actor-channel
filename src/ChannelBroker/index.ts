@@ -73,6 +73,26 @@ export class ChannelBroker<
   }
 
   /**
+   * Marks a channel as authenticated under the host application's identity
+   * policy and emits an `attachment` event.
+   *
+   * This operation is intentionally one-way. Transport authentication remains
+   * the responsibility of the server and its HTTPS/WebSocket stack.
+   *
+   * @param channel - The channel whose application-level identity was verified.
+   */
+  markAuthenticated(channel: ActorChannelPair): void {
+    const channelAttachment = this.channelAttachments.get(channel)
+    if (!channelAttachment) return
+    channelAttachment.authenticated = true
+
+    return void this.dispatchEvent('attachment', {
+      owner: channel,
+      attachment: channelAttachment,
+    })
+  }
+
+  /**
    * Handles an encoded protocol message received from a channel.
    *
    * @param sender - The channel that sent the message.

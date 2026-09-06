@@ -312,6 +312,34 @@ describe('ChannelBroker', () => {
     expect(changes).toEqual([])
   })
 
+  it('marks a registered channel as application-level authenticated', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    const attachment: ChannelAttachment<string> = {}
+    const listener = vi.fn()
+    broker.addEventListener('attachment', listener)
+    broker.addChannel(channel, attachment)
+
+    broker.markAuthenticated(channel)
+
+    expect(attachment.authenticated).toBe(true)
+    expect(listener).toHaveBeenCalledOnce()
+    expect(listener.mock.calls[0]![0].detail).toEqual({
+      owner: channel,
+      attachment,
+    })
+  })
+
+  it('ignores authentication for a channel that was not added', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const listener = vi.fn()
+    broker.addEventListener('attachment', listener)
+
+    broker.markAuthenticated(new TestChannel())
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('throws when the same channel is added twice', () => {
     const broker = new ChannelBroker<string, unknown, string, string>()
     const channel = new TestChannel()

@@ -200,10 +200,12 @@ export type ActorChannelPair = {
 
 /** Metadata and broker state associated with a channel. */
 export type ChannelAttachment<Topic> = {
-  /** The channel's IP address. */
+  /** Whether the host authenticated the channel's application-level identity. */
+  authenticated?: boolean
+  /** The channel's IP address, managed by the host. */
   ipAddress?: string
-  /** Whether the channel may issue RPC requests. */
+  /** Whether the channel may issue RPC requests, managed automatically. */
   rpcEnabled?: boolean
-  /** Topics currently subscribed by the channel. */
+  /** Topics currently subscribed by the channel, managed automatically. */
   topics?: Set<Topic>
 }

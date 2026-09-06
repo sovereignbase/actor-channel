@@ -85,6 +85,10 @@ broker.addEventListener('request', (event) => {
 
 broker.addChannel(socket, { rpcEnabled: true })
 
+// Verify application-level identity using your own protocol and policy.
+// Transport authentication is handled separately by HTTPS/WebSocket.
+broker.markAuthenticated(socket)
+
 socket.addEventListener('message', (event) => {
   broker.handleMessage(socket, event.data)
 })
@@ -114,6 +118,9 @@ The transport passed to `ChannelBroker` must expose `send(ArrayBuffer)` and
 - `addChannel(channel, attachment?)` adds a transport with optional metadata,
   RPC access, and initial subscriptions.
 - `deleteChannel(channel)` removes a transport and its subscriptions.
+- `markAuthenticated(channel)` records that the host application has verified
+  the channel's application-level identity and emits an `attachment` event.
+  The method is intentionally one-way and provides no unset operation.
 - `handleMessage(channel, message)` handles an encoded client message.
 - `dispatchEvent(type, detail)` dispatches a typed broker event to registered
   listeners.
@@ -135,6 +142,9 @@ The transport passed to `ChannelBroker` must expose `send(ArrayBuffer)` and
 - `rpcAvailable` is `true` when the channel knows of at least one open
   RPC-enabled broker WebSocket.
 - Protocol messages are MessagePack-encoded `ArrayBuffer` values.
+- `authenticated` does not describe HTTPS/WebSocket transport authentication.
+  The host sets it through `markAuthenticated(channel)` after verifying an
+  application-level identity with its own protocol, cryptosuite, and policy.
 - `ChannelBroker` uses standard web platform primitives and does not require a
   specific server framework.
 
