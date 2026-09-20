@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/sovereignbase/actor-channel/compare/v1.5.0...v1.6.0) (2026-09-20)
+
+
+### Features
+
+* add id prop to attachment type ([3e7df37](https://github.com/sovereignbase/actor-channel/commit/3e7df37f880b58c3cdeb7c81db7399da0b05f8de))
+
 ## [1.5.0](https://github.com/sovereignbase/actor-channel/compare/v1.4.0...v1.5.0) (2026-09-06)
 
 
