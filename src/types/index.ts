@@ -204,6 +204,8 @@ export type ChannelAttachment<Topic> = {
   authenticated?: boolean
   /** Lets you temporarily store an authentication challenge. */
   challenge?: Uint8Array
+  /** Lets you store an id. */
+  id?: string
   /** The channel's IP address, managed by the host. */
   ipAddress?: string
   /** Whether the channel may issue RPC requests, managed automatically. */
