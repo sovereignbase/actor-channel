@@ -494,7 +494,13 @@ export class ActorChannel<
   //* ███████╗ ╚████╔╝ ███████╗██║ ╚████║   ██║          ██║   ██║  ██║██║  ██║╚██████╔╝███████╗   ██║
   //* ╚══════╝  ╚═══╝  ╚══════╝╚═╝  ╚═══╝   ╚═╝          ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝
 
-  private dispatchEvent<
+  /**
+   * Dispatches a channel event to registered listeners.
+   *
+   * @param type - The event type.
+   * @param detail - The event payload.
+   */
+  public dispatchEvent<
     K extends keyof ActorChannelEventMap<RPCResponse, Topic, Message>,
   >(
     type: K,
