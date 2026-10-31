@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/sovereignbase/actor-channel/compare/v1.6.0...v1.7.0) (2026-10-31)
+
+
+### Features
+
+* add empty brokers method ([aae4f7c](https://github.com/sovereignbase/actor-channel/commit/aae4f7c48e6c627cea37811e34543ad0d3011973))
+
 ## [1.6.0](https://github.com/sovereignbase/actor-channel/compare/v1.5.0...v1.6.0) (2026-09-20)
 
 
