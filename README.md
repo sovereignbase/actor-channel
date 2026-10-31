@@ -185,23 +185,21 @@ Vitest: 54 passed, 0 failed, 0 skipped, 0 todo. Result: passed.
 | Browser                             | Result | Passed | Failed | Flaky | Skipped |
 | ----------------------------------- | ------ | ------ | ------ | ----- | ------- |
 | Chromium                            | Passed | 4      | 0      | 0     | 0       |
-| Firefox                             | Failed | 0      | 4      | 0     | 0       |
+| Firefox                             | Passed | 4      | 0      | 0     | 0       |
 | WebKit                              | Passed | 4      | 0      | 0     | 0       |
 | Mobile Chromium (Pixel 7 emulation) | Passed | 4      | 0      | 0     | 0       |
-| Mobile Firefox (touch viewport)     | Failed | 0      | 4      | 0     | 0       |
+| Mobile Firefox (touch viewport)     | Passed | 4      | 0      | 0     | 0       |
 | Mobile WebKit (iPhone 15 emulation) | Passed | 4      | 0      | 0     | 0       |
-
-Browser suite: failed.
 
 ### Broker runtimes
 
-| Runtime                      | Version                                              | Result |
-| ---------------------------- | ---------------------------------------------------- | ------ |
-| Node.js                      | v24.16.0                                             | Passed |
-| Bun                          | 1.3.10                                               | Passed |
-| Deno                         | deno 2.8.3 (stable, release, x86_64-pc-windows-msvc) | Passed |
-| Vercel Edge Runtime          | 4.0.1                                                | Passed |
-| Cloudflare Workers (workerd) | 1.20261023.1                                         | Passed |
+| Runtime                      | Version                                                | Result |
+| ---------------------------- | ------------------------------------------------------ | ------ |
+| Node.js                      | v24.22.1                                               | Passed |
+| Bun                          | 1.4.4                                                  | Passed |
+| Deno                         | deno 2.9.8 (stable, release, x86_64-unknown-linux-gnu) | Passed |
+| Vercel Edge Runtime          | 4.0.1                                                  | Passed |
+| Cloudflare Workers (workerd) | 1.20261023.1                                           | Passed |
 
 Results are updated automatically after each test run. Browser tests use native Broadcast Channel, Web Locks and WebSocket APIs with a local broker. Mobile projects use emulation; runtime tests cover `ChannelBroker`. “Not run” describes missing test results, not lack of platform support.
 
