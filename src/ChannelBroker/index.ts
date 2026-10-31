@@ -1,11 +1,10 @@
-import { ActorChannel } from '../ActorChannel/index.js'
 import type {
   Context,
   ActorChannelPair,
   ChannelAttachment,
   ChannelBrokerEventMap,
   ChannelBrokerEventListenerFor,
-} from '../types/index.js'
+} from '../types/type.js'
 import { decode, encode } from '@msgpack/msgpack'
 
 /**

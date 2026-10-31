@@ -3,7 +3,7 @@ import type {
   Context,
   ActorChannelEventMap,
   ActorChannelEventListenerFor,
-} from '../types/index.js'
+} from '../types/type.js'
 
 /**
  * Coordinates RPC requests and topic messages across the current browsing
@@ -23,9 +23,7 @@ export class ActorChannel<
   //
   private readonly eventTarget = new EventTarget()
   //
-  private readonly broadcastChannel: BroadcastChannel = new BroadcastChannel(
-    '@sovereignbase/actor-socket:broadcast-channel'
-  )
+  private readonly broadcastChannel: BroadcastChannel
   //
   private readonly allBrokers: Set<WebSocket> = new Set()
   private readonly rpcEnabled: Set<WebSocket> = new Set()
@@ -38,17 +36,19 @@ export class ActorChannel<
   private readonly myTopics: Set<Topic> = new Set()
   //
   private rpcBrokers: number = -1
+  private brokerController = new AbortController()
 
   /** Whether at least one RPC-enabled broker is currently available. */
   public get rpcAvailable(): boolean {
     return this.rpcBrokers > 0
   }
 
-  //      //  //////  //////////  //    //      //      ////       ////
-  ////  ////  //          //      //    //    //  //    //  //  ///
-  //  //  //  //////      //      ////////  //      //  //    /   ///
-  //      //  //          //      //    //    //  //    //  //      ///
-  //      //  //////      //      //    //      //      ////    ////
+  //* ███╗   ███╗███████╗████████╗██╗  ██╗ ██████╗ ██████╗ ███████╗
+  //* ████╗ ████║██╔════╝╚══██╔══╝██║  ██║██╔═══██╗██╔══██╗██╔════╝
+  //* ██╔████╔██║█████╗     ██║   ███████║██║   ██║██║  ██║███████╗
+  //* ██║╚██╔╝██║██╔══╝     ██║   ██╔══██║██║   ██║██║  ██║╚════██║
+  //* ██║ ╚═╝ ██║███████╗   ██║   ██║  ██║╚██████╔╝██████╔╝███████║
+  //* ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝
 
   /**
    * Sends an RPC request to an available RPC-enabled broker.
@@ -126,14 +126,21 @@ export class ActorChannel<
     void this.broadcastChannel.postMessage(ctx)
     return void this.subscribeFanout(ctx)
   }
-  ///////  //////  //  //  //////  ////
-  //   //    //    //  //  //      //  //
-  //   //    //    //////  //////  ////
-  //   //    //    //  //  //      ////
-  ///////    //    //  //  //////  //  //
+
+  //*  ██████╗ ████████╗██╗  ██╗███████╗██████╗
+  //* ██╔═══██╗╚══██╔══╝██║  ██║██╔════╝██╔══██╗
+  //* ██║   ██║   ██║   ███████║█████╗  ██████╔╝
+  //* ██║   ██║   ██║   ██╔══██║██╔══╝  ██╔══██╗
+  //* ╚██████╔╝   ██║   ██║  ██║███████╗██║  ██║
+  //*  ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 
   /** Creates an actor channel for the current browsing context. */
-  constructor() {
+  constructor(storageHandle?: StorageAccessHandle) {
+    const name = '@sovereignbase/actor-channel:broadcast-channel'
+    this.broadcastChannel = storageHandle
+      ? storageHandle.BroadcastChannel(name)
+      : new BroadcastChannel(name)
+
     //////////////////////////////////
     // Best effort truth keeper xD //
     ////////////////////////////////
@@ -242,14 +249,16 @@ export class ActorChannel<
   ): Promise<void> {
     if (typeof brokerUrl !== 'string' || !window.navigator.locks) return
 
+    const signal = this.brokerController.signal
+
     try {
-      while (true) {
+      while (!signal.aborted) {
         await window.navigator.locks.request(
           `@sovereignbase/actor-channel:web-lock:${brokerUrl}`,
-          { ifAvailable: true },
+          { ifAvailable: true, signal },
           async (lockHandle) => {
             // Some channel already has a connection to the broker.
-            if (!lockHandle) return
+            if (!lockHandle || signal.aborted) return
 
             let socket: WebSocket
 
@@ -264,6 +273,7 @@ export class ActorChannel<
             if (rpcEnabled) void this.rpcEnabled.add(socket)
 
             void socket.addEventListener('open', () => {
+              if (signal.aborted) return
               if (rpcEnabled) {
                 void this.rpcOnline.add(socket)
                 void this.rpcFanout(1)
@@ -280,6 +290,7 @@ export class ActorChannel<
             })
 
             socket.onmessage = (event: MessageEvent<ArrayBuffer>) => {
+              if (signal.aborted) return
               let ctx: Context<Topic, Message, RPCRequest, RPCResponse>
               try {
                 ctx = decode(event.data) as Context<
@@ -357,18 +368,51 @@ export class ActorChannel<
           }
         )
 
-        await new Promise<void>((resolve) => setTimeout(resolve, 10_000))
+        if (signal.aborted) return
+
+        await new Promise<void>((resolve) => {
+          const done = () => {
+            clearTimeout(timeout)
+            signal.removeEventListener('abort', done)
+            resolve()
+          }
+          const timeout = setTimeout(done, 10_000)
+          signal.addEventListener('abort', done, { once: true })
+          if (signal.aborted) done()
+        })
       }
     } catch {
       return
     }
   }
 
-  //    //  //////  //      ////    //////  ////      /////
-  //    //  //      //      //  //  //      //  //  ///
-  ////////  //////  //      ////    //////  ////      ///
-  //    //  //      //      //      //      //  //      ///
-  //    //  //////  //////  //      //////  //  //  /////
+  /**
+   * Closes all broker connections and stops their reconnection loops.
+   *
+   * Local subscriptions and the broadcast channel remain active.
+   * New brokers may be added afterward.
+   */
+  emptyBrokers(): void {
+    this.brokerController.abort()
+    this.brokerController = new AbortController()
+
+    const diff = -this.rpcOnline.size
+    this.rpcOnline.clear()
+    if (diff) this.rpcFanout(diff)
+
+    for (const socket of this.allBrokers) socket.close()
+
+    this.allBrokers.clear()
+    this.rpcEnabled.clear()
+    this.brokerTopics.clear()
+  }
+
+  //* ██╗  ██╗███████╗██╗     ██████╗ ███████╗██████╗ ███████╗
+  //* ██║  ██║██╔════╝██║     ██╔══██╗██╔════╝██╔══██╗██╔════╝
+  //* ███████║█████╗  ██║     ██████╔╝█████╗  ██████╔╝███████╗
+  //* ██╔══██║██╔══╝  ██║     ██╔═══╝ ██╔══╝  ██╔══██╗╚════██║
+  //* ██║  ██║███████╗███████╗██║     ███████╗██║  ██║███████║
+  //* ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝╚══════╝
 
   private remoteProcedureCall(buffer: ArrayBuffer): void {
     if (this.rpcEnabled.size < 1) return
@@ -416,6 +460,7 @@ export class ActorChannel<
         void socket.send(buffer)
     return
   }
+
   private subscribeFanout(
     ctx: Context<Topic, Message, RPCRequest, RPCResponse>
   ): void {
@@ -441,6 +486,13 @@ export class ActorChannel<
       if (socket.readyState === WebSocket.OPEN) void socket.send(buffer)
     return
   }
+
+  //* ███████╗██╗   ██╗███████╗███╗   ██╗████████╗    ████████╗ █████╗ ██████╗  ██████╗ ███████╗████████╗
+  //* ██╔════╝██║   ██║██╔════╝████╗  ██║╚══██╔══╝    ╚══██╔══╝██╔══██╗██╔══██╗██╔════╝ ██╔════╝╚══██╔══╝
+  //* █████╗  ██║   ██║█████╗  ██╔██╗ ██║   ██║          ██║   ███████║██████╔╝██║  ███╗█████╗     ██║
+  //* ██╔══╝  ╚██╗ ██╔╝██╔══╝  ██║╚██╗██║   ██║          ██║   ██╔══██║██╔══██╗██║   ██║██╔══╝     ██║
+  //* ███████╗ ╚████╔╝ ███████╗██║ ╚████║   ██║          ██║   ██║  ██║██║  ██║╚██████╔╝███████╗   ██║
+  //* ╚══════╝  ╚═══╝  ╚══════╝╚═╝  ╚═══╝   ╚═╝          ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝
 
   private dispatchEvent<
     K extends keyof ActorChannelEventMap<RPCResponse, Topic, Message>,
