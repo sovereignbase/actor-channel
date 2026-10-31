@@ -1,7 +1,9 @@
 /** Identifies an ActorChannel failure independently of its human-readable message. */
 export type ActorChannelErrorCode =
+  /** The same transport was registered with a broker more than once. */
+  | 'CHANNEL_ALREADY_ADDED'
   /** An unexpected failure was wrapped with its original cause. */
-  'UNKNOWN_ERROR'
+  | 'UNKNOWN_ERROR'
 
 /**
  * An ActorChannel error with a stable, machine-readable code and an optional cause.

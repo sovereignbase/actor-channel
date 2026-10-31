@@ -1,4 +1,5 @@
 import { encode, decode } from '@msgpack/msgpack'
+import { unknownError } from '../errors/unknown.js'
 import type {
   Context,
   ActorChannelEventMap,
@@ -57,19 +58,24 @@ export class ActorChannel<
    *
    * @param detail - The request payload.
    * @returns The identifier assigned to the request.
+   * @throws {@link ActorChannelError} if sending or encoding fails.
    */
   request(detail: RPCRequest): string {
-    const id = window.crypto.randomUUID()
-    void this.myRequests.add(id)
-    const ctx: Context<Topic, Message, RPCRequest, RPCResponse> = {
-      kind: 'request',
-      id,
-      detail,
+    try {
+      const id = window.crypto.randomUUID()
+      void this.myRequests.add(id)
+      const ctx: Context<Topic, Message, RPCRequest, RPCResponse> = {
+        kind: 'request',
+        id,
+        detail,
+      }
+      void void this.broadcastChannel.postMessage(ctx)
+      const buffer = encode<typeof ctx>(ctx).slice().buffer
+      void this.remoteProcedureCall(buffer)
+      return id
+    } catch (cause) {
+      throw unknownError(cause, 'ActorChannel.request()')
     }
-    void void this.broadcastChannel.postMessage(ctx)
-    const buffer = encode<typeof ctx>(ctx).slice().buffer
-    void this.remoteProcedureCall(buffer)
-    return id
   }
 
   /**
@@ -77,16 +83,21 @@ export class ActorChannel<
    *
    * @param topic - The topic to publish to.
    * @param detail - The message payload.
+   * @throws {@link ActorChannelError} if sending or encoding fails.
    */
   publish(topic: Topic, detail: Message): void {
-    const ctx: Context<Topic, Message, RPCRequest, RPCResponse> = {
-      kind: 'publish',
-      from: 'client',
-      topic,
-      detail,
+    try {
+      const ctx: Context<Topic, Message, RPCRequest, RPCResponse> = {
+        kind: 'publish',
+        from: 'client',
+        topic,
+        detail,
+      }
+      void this.broadcastChannel.postMessage(ctx)
+      return void this.publishFanout(ctx)
+    } catch (cause) {
+      throw unknownError(cause, 'ActorChannel.publish()')
     }
-    void this.broadcastChannel.postMessage(ctx)
-    return void this.publishFanout(ctx)
   }
 
   /**
@@ -95,36 +106,46 @@ export class ActorChannel<
    * Repeated subscriptions to the same topic have no effect.
    *
    * @param topic - The topic to subscribe to.
+   * @throws {@link ActorChannelError} if forwarding the subscription fails.
    */
   subscribe(topic: Topic): void {
-    if (this.myTopics.has(topic)) return
+    try {
+      if (this.myTopics.has(topic)) return
 
-    void this.myTopics.add(topic)
+      void this.myTopics.add(topic)
 
-    const ctx: Context<Topic, Message, RPCRequest, RPCResponse> = {
-      kind: 'subscribe',
-      topic,
-      from: 'client',
+      const ctx: Context<Topic, Message, RPCRequest, RPCResponse> = {
+        kind: 'subscribe',
+        topic,
+        from: 'client',
+      }
+      void this.broadcastChannel.postMessage(ctx)
+      return void this.subscribeFanout(ctx)
+    } catch (cause) {
+      throw unknownError(cause, 'ActorChannel.subscribe()')
     }
-    void this.broadcastChannel.postMessage(ctx)
-    return void this.subscribeFanout(ctx)
   }
 
   /**
    * Removes this browsing context's subscription to a topic.
    *
    * @param topic - The topic to unsubscribe from.
+   * @throws {@link ActorChannelError} if forwarding the subscription fails.
    */
   unsubscribe(topic: Topic): void {
-    if (!this.myTopics.delete(topic)) return
+    try {
+      if (!this.myTopics.delete(topic)) return
 
-    const ctx: Context<Topic, Message, RPCRequest, RPCResponse> = {
-      kind: 'unsubscribe',
-      topic,
-      from: 'client',
+      const ctx: Context<Topic, Message, RPCRequest, RPCResponse> = {
+        kind: 'unsubscribe',
+        topic,
+        from: 'client',
+      }
+      void this.broadcastChannel.postMessage(ctx)
+      return void this.subscribeFanout(ctx)
+    } catch (cause) {
+      throw unknownError(cause, 'ActorChannel.unsubscribe()')
     }
-    void this.broadcastChannel.postMessage(ctx)
-    return void this.subscribeFanout(ctx)
   }
 
   //*  ██████╗ ████████╗██╗  ██╗███████╗██████╗
@@ -134,105 +155,116 @@ export class ActorChannel<
   //* ╚██████╔╝   ██║   ██║  ██║███████╗██║  ██║
   //*  ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 
-  /** Creates an actor channel for the current browsing context. */
+  /**
+   * Creates an actor channel for the current browsing context.
+   * @param storageHandle - Optional access to an unpartitioned broadcast channel.
+   * @throws {@link ActorChannelError} if channel initialization fails.
+   */
   constructor(storageHandle?: StorageAccessHandle) {
-    const name = '@sovereignbase/actor-channel:broadcast-channel'
-    this.broadcastChannel = storageHandle
-      ? storageHandle.BroadcastChannel(name)
-      : new BroadcastChannel(name)
+    try {
+      const name = '@sovereignbase/actor-channel:broadcast-channel'
+      this.broadcastChannel = storageHandle
+        ? storageHandle.BroadcastChannel(name)
+        : new BroadcastChannel(name)
 
-    //////////////////////////////////
-    // Best effort truth keeper xD //
-    ////////////////////////////////
-    const fanoutTopics = (kind: 'subscribe' | 'unsubscribe') => {
-      for (const topic of this.myTopics) {
-        const ctx = {
-          kind,
-          topic,
-          from: 'client',
-        } as Context<Topic, Message, RPCRequest, RPCResponse>
-        void this.broadcastChannel.postMessage(ctx)
-        void this.subscribeFanout(ctx)
+      //////////////////////////////////
+      // Best effort truth keeper xD //
+      ////////////////////////////////
+      const fanoutTopics = (kind: 'subscribe' | 'unsubscribe') => {
+        for (const topic of this.myTopics) {
+          const ctx = {
+            kind,
+            topic,
+            from: 'client',
+          } as Context<Topic, Message, RPCRequest, RPCResponse>
+          void this.broadcastChannel.postMessage(ctx)
+          void this.subscribeFanout(ctx)
+        }
       }
-    }
 
-    void window.addEventListener('pagehide', () => {
-      void fanoutTopics('unsubscribe')
-      const diff = -this.rpcOnline.size
-      void this.rpcOnline.clear()
-      if (diff) void this.rpcFanout(diff)
-    })
-    window.addEventListener('pageshow', (event) => {
-      if (!event.persisted) return
-      void fanoutTopics('subscribe')
-      for (const socket of this.rpcEnabled) {
-        if (socket.readyState !== WebSocket.OPEN || this.rpcOnline.has(socket))
-          continue
-        void this.rpcOnline.add(socket)
-        void this.rpcFanout(1)
-      }
-    })
+      void window.addEventListener('pagehide', () => {
+        void fanoutTopics('unsubscribe')
+        const diff = -this.rpcOnline.size
+        void this.rpcOnline.clear()
+        if (diff) void this.rpcFanout(diff)
+      })
+      window.addEventListener('pageshow', (event) => {
+        if (!event.persisted) return
+        void fanoutTopics('subscribe')
+        for (const socket of this.rpcEnabled) {
+          if (
+            socket.readyState !== WebSocket.OPEN ||
+            this.rpcOnline.has(socket)
+          )
+            continue
+          void this.rpcOnline.add(socket)
+          void this.rpcFanout(1)
+        }
+      })
 
-    this.broadcastChannel.onmessage = (
-      event: MessageEvent<Context<Topic, Message, RPCRequest, RPCResponse>>
-    ) => {
-      const ctx = event.data
-      if (!ctx) return
+      this.broadcastChannel.onmessage = (
+        event: MessageEvent<Context<Topic, Message, RPCRequest, RPCResponse>>
+      ) => {
+        const ctx = event.data
+        if (!ctx) return
 
-      if (ctx.kind === 'internal' && ctx.detail.var === 'rpcBrokers') {
-        if ('ping' in ctx.detail) return void this.respondRpcBrokers()
+        if (ctx.kind === 'internal' && ctx.detail.var === 'rpcBrokers') {
+          if ('ping' in ctx.detail) return void this.respondRpcBrokers()
+          if (
+            this.rpcBrokers < 0 ||
+            ctx.detail.prev === this.rpcBrokers ||
+            ctx.detail.prev === ctx.detail.count
+          )
+            return void (this.rpcBrokers = ctx.detail.count)
+          return void this.broadcastChannel.postMessage({
+            kind: 'internal',
+            detail: { var: 'rpcBrokers', ping: true },
+          })
+        }
+
+        ////////////////
+        //  REQUEST  //
+        //////////////
+        if (ctx.kind === 'request') {
+          void this.remoteProcedureCall(encode<typeof ctx>(ctx).slice().buffer)
+        }
+        ////////////////
+        //  RESPONSE //
+        //////////////
+        if (ctx.kind === 'response') {
+          if (!this.myRequests.has(ctx.id)) return
+          void this.myRequests.delete(ctx.id)
+          return void this.dispatchEvent('response', [ctx.id, ctx.detail])
+        }
+        ////////////////
+        //  PUBLISH  //
+        //////////////
+        if (ctx.kind === 'publish') {
+          if (this.myTopics.has(ctx.topic)) {
+            void this.dispatchEvent('message', [ctx.topic, ctx.detail])
+          }
+          if (ctx.from === 'client') {
+            return void this.publishFanout(ctx)
+          }
+        }
+        ///////////////////////////////
+        //  SUBSCRIBE / UNSUBSCRIBE //
+        /////////////////////////////
         if (
-          this.rpcBrokers < 0 ||
-          ctx.detail.prev === this.rpcBrokers ||
-          ctx.detail.prev === ctx.detail.count
-        )
-          return void (this.rpcBrokers = ctx.detail.count)
-        return void this.broadcastChannel.postMessage({
-          kind: 'internal',
-          detail: { var: 'rpcBrokers', ping: true },
-        })
+          (ctx.kind === 'subscribe' || ctx.kind === 'unsubscribe') &&
+          ctx.from === 'client'
+        ) {
+          return void this.subscribeFanout(ctx)
+        }
       }
 
-      ////////////////
-      //  REQUEST  //
-      //////////////
-      if (ctx.kind === 'request') {
-        void this.remoteProcedureCall(encode<typeof ctx>(ctx).slice().buffer)
-      }
-      ////////////////
-      //  RESPONSE //
-      //////////////
-      if (ctx.kind === 'response') {
-        if (!this.myRequests.has(ctx.id)) return
-        void this.myRequests.delete(ctx.id)
-        return void this.dispatchEvent('response', [ctx.id, ctx.detail])
-      }
-      ////////////////
-      //  PUBLISH  //
-      //////////////
-      if (ctx.kind === 'publish') {
-        if (this.myTopics.has(ctx.topic)) {
-          void this.dispatchEvent('message', [ctx.topic, ctx.detail])
-        }
-        if (ctx.from === 'client') {
-          return void this.publishFanout(ctx)
-        }
-      }
-      ///////////////////////////////
-      //  SUBSCRIBE / UNSUBSCRIBE //
-      /////////////////////////////
-      if (
-        (ctx.kind === 'subscribe' || ctx.kind === 'unsubscribe') &&
-        ctx.from === 'client'
-      ) {
-        return void this.subscribeFanout(ctx)
-      }
+      void this.broadcastChannel.postMessage({
+        kind: 'internal',
+        detail: { var: 'rpcBrokers', ping: true },
+      })
+    } catch (cause) {
+      throw unknownError(cause, 'ActorChannel.constructor()')
     }
-
-    void this.broadcastChannel.postMessage({
-      kind: 'internal',
-      detail: { var: 'rpcBrokers', ping: true },
-    })
   }
 
   /**
@@ -255,7 +287,7 @@ export class ActorChannel<
       while (!signal.aborted) {
         await window.navigator.locks.request(
           `@sovereignbase/actor-channel:web-lock:${brokerUrl}`,
-          { ifAvailable: true, signal },
+          { ifAvailable: true },
           async (lockHandle) => {
             // Some channel already has a connection to the broker.
             if (!lockHandle || signal.aborted) return
@@ -390,21 +422,27 @@ export class ActorChannel<
    * Closes all broker connections and stops their reconnection loops.
    *
    * Local subscriptions and the broadcast channel remain active.
-   * New brokers may be added afterward.
+   * New brokers may be added afterward. Connections owned by other instances
+   * are unaffected. Repeated calls with no brokers are harmless.
+   * @throws {@link ActorChannelError} if broker cleanup fails.
    */
   emptyBrokers(): void {
-    this.brokerController.abort()
-    this.brokerController = new AbortController()
+    try {
+      this.brokerController.abort()
+      this.brokerController = new AbortController()
 
-    const diff = -this.rpcOnline.size
-    this.rpcOnline.clear()
-    if (diff) this.rpcFanout(diff)
+      const diff = -this.rpcOnline.size
+      this.rpcOnline.clear()
+      if (diff) this.rpcFanout(diff)
 
-    for (const socket of this.allBrokers) socket.close()
+      for (const socket of this.allBrokers) socket.close()
 
-    this.allBrokers.clear()
-    this.rpcEnabled.clear()
-    this.brokerTopics.clear()
+      this.allBrokers.clear()
+      this.rpcEnabled.clear()
+      this.brokerTopics.clear()
+    } catch (cause) {
+      throw unknownError(cause, 'ActorChannel.emptyBrokers()')
+    }
   }
 
   //* ██╗  ██╗███████╗██╗     ██████╗ ███████╗██████╗ ███████╗

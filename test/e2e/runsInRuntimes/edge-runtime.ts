@@ -2,7 +2,7 @@ import { build } from 'esbuild'
 import { EdgeRuntime } from 'edge-runtime'
 
 const bundle = await build({
-  entryPoints: ['test/e2e/runsInRuntimes/channel-broker-runtime.mjs'],
+  entryPoints: ['test/e2e/runsInRuntimes/channel-broker-runtime.ts'],
   bundle: true,
   format: 'iife',
   platform: 'browser',

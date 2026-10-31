@@ -40,6 +40,10 @@
 <li><code>unsubscribe(topic)</code> removes the current window's subscription.</li>
 <li><code>addBroker(url, rpcEnabled?)</code> repeatedly attempts to acquire a URL-specific
 Web Lock and maintains the WebSocket while it owns the lock.</li>
+<li><code>emptyBrokers()</code> closes this instance's open and connecting broker sockets,
+cancels their reconnection loops and releases their Web Locks. Local
+subscriptions, listeners and the broadcast channel remain active. Brokers
+owned by other instances are unaffected, and new brokers can be added afterward.</li>
 </ul>
 <h3 id="_-1" class="tsd-anchor-link"><code>ChannelBroker</code><a href="#_-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul>
@@ -76,15 +80,157 @@ application-level identity with its own protocol, cryptosuite, and policy.</li>
 <li><code>ChannelBroker</code> uses standard web platform primitives and does not require a
 specific server framework.</li>
 </ul>
+<h2 id="errors" class="tsd-anchor-link">Errors<a href="#errors" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p><code>ActorChannelError</code> exposes a stable <code>code</code>, a package-prefixed message and an
+optional original <code>cause</code>. It is exported with the <code>ActorChannelErrorCode</code> type.</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CHANNEL_ALREADY_ADDED</code></td>
+<td>The same transport was added to a broker twice.</td>
+</tr>
+<tr>
+<td><code>UNKNOWN_ERROR</code></td>
+<td>An unexpected channel or broker operation failed; <code>cause</code> retains the original failure.</td>
+</tr>
+</tbody>
+</table>
+<p>Operational failures in channel construction, requests, publication,
+subscription changes, broker cleanup and broker message handling are wrapped
+once. Broker connection attempts remain best-effort: unavailable Web Locks,
+socket construction failures and aborted connection loops do not reject
+<code>addBroker()</code>. Invalid broker frames are ignored; invalid client frames and
+unauthorized requests produce broker <code>violation</code> events. Application event
+listeners follow the platform's <code>EventTarget</code> error behavior.</p>
 <h2 id="tests" class="tsd-anchor-link">Tests<a href="#tests" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
-<ul>
-<li>Unit and integration tests in Vitest with 100% statement, branch, function,
-and line coverage.</li>
-<li>Browser E2E tests in Chromium, Firefox, WebKit, Mobile Chromium, Mobile
-Firefox, and Mobile WebKit.</li>
-<li><code>ChannelBroker</code> runtime tests in Node.js, Bun, Deno, Vercel Edge Runtime, and
-Cloudflare Workers (<code>workerd</code>).</li>
-</ul>
+<p>Vitest: 54 passed, 0 failed, 0 skipped, 0 todo. Result: passed.</p>
+<h3 id="coverage" class="tsd-anchor-link">Coverage<a href="#coverage" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Statements</th>
+<th>Branches</th>
+<th>Functions</th>
+<th>Lines</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>100%</td>
+<td>100%</td>
+<td>100%</td>
+<td>100%</td>
+</tr>
+</tbody>
+</table>
+<h3 id="browsers" class="tsd-anchor-link">Browsers<a href="#browsers" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Browser</th>
+<th>Result</th>
+<th>Passed</th>
+<th>Failed</th>
+<th>Flaky</th>
+<th>Skipped</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Chromium</td>
+<td>Passed</td>
+<td>4</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Firefox</td>
+<td>Failed</td>
+<td>0</td>
+<td>4</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>WebKit</td>
+<td>Passed</td>
+<td>4</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Mobile Chromium (Pixel 7 emulation)</td>
+<td>Passed</td>
+<td>4</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Mobile Firefox (touch viewport)</td>
+<td>Failed</td>
+<td>0</td>
+<td>4</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Mobile WebKit (iPhone 15 emulation)</td>
+<td>Passed</td>
+<td>4</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>Browser suite: failed.</p>
+<h3 id="broker-runtimes" class="tsd-anchor-link">Broker runtimes<a href="#broker-runtimes" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Runtime</th>
+<th>Version</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Node.js</td>
+<td>v24.16.0</td>
+<td>Passed</td>
+</tr>
+<tr>
+<td>Bun</td>
+<td>1.3.10</td>
+<td>Passed</td>
+</tr>
+<tr>
+<td>Deno</td>
+<td>deno 2.8.3 (stable, release, x86_64-pc-windows-msvc)</td>
+<td>Passed</td>
+</tr>
+<tr>
+<td>Vercel Edge Runtime</td>
+<td>4.0.1</td>
+<td>Passed</td>
+</tr>
+<tr>
+<td>Cloudflare Workers (workerd)</td>
+<td>1.20261023.1</td>
+<td>Passed</td>
+</tr>
+</tbody>
+</table>
+<p>Results are updated automatically after each test run. Browser tests use native Broadcast Channel, Web Locks and WebSocket APIs with a local broker. Mobile projects use emulation; runtime tests cover <code>ChannelBroker</code>. “Not run” describes missing test results, not lack of platform support.</p>
 <h2 id="license" class="tsd-anchor-link">License<a href="#license" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <p>Apache-2.0</p>
 </div></div>
@@ -116,7 +262,13 @@ Cloudflare Workers (<code>workerd</code>).</li>
 <li><a href="#_"><span></span></a></li>
 <li><a href="#_-1"><span></span></a></li></ul></li>
 <li><a href="#behavior"><span>Behavior</span></a></li>
+<li><a href="#errors"><span>Errors</span></a></li>
 <li><a href="#tests"><span>Tests</span></a></li>
+<li>
+<ul>
+<li><a href="#coverage"><span>Coverage</span></a></li>
+<li><a href="#browsers"><span>Browsers</span></a></li>
+<li><a href="#broker-runtimes"><span>Broker runtimes</span></a></li></ul></li>
 <li><a href="#license"><span>License</span></a></li></ul></div></details></div>
 <div class="site-menu">
 <nav class="tsd-navigation"><a href="modules.html">@sovereignbase/actor-channel</a>

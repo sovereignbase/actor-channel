@@ -7,8 +7,19 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
+  reporter: [
+    ['list'],
+    ['json', { outputFile: 'test/.results/browsers.json' }],
+    ['html', { open: 'never' }],
+  ],
   use: {
+    baseURL: 'http://127.0.0.1:4173',
     trace: 'retain-on-failure',
+  },
+  webServer: {
+    command: 'node test/e2e/runsInBrowsers/server.ts',
+    url: 'http://127.0.0.1:4173',
+    reuseExistingServer: !process.env.CI,
   },
   projects: [
     {

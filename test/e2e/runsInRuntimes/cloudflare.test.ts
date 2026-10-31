@@ -1,4 +1,4 @@
-import './channel-broker-runtime.mjs'
+import './channel-broker-runtime.ts'
 import { expect, test } from 'vitest'
 
 test('runs ChannelBroker in Cloudflare Workers', () => {

@@ -112,6 +112,10 @@ The transport passed to `ChannelBroker` must expose `send(ArrayBuffer)` and
 - `unsubscribe(topic)` removes the current window's subscription.
 - `addBroker(url, rpcEnabled?)` repeatedly attempts to acquire a URL-specific
   Web Lock and maintains the WebSocket while it owns the lock.
+- `emptyBrokers()` closes this instance's open and connecting broker sockets,
+  cancels their reconnection loops and releases their Web Locks. Local
+  subscriptions, listeners and the broadcast channel remain active. Brokers
+  owned by other instances are unaffected, and new brokers can be added afterward.
 
 ### `ChannelBroker`
 
@@ -148,14 +152,58 @@ The transport passed to `ChannelBroker` must expose `send(ArrayBuffer)` and
 - `ChannelBroker` uses standard web platform primitives and does not require a
   specific server framework.
 
+## Errors
+
+`ActorChannelError` exposes a stable `code`, a package-prefixed message and an
+optional original `cause`. It is exported with the `ActorChannelErrorCode` type.
+
+| Code                    | Meaning                                                                                 |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| `CHANNEL_ALREADY_ADDED` | The same transport was added to a broker twice.                                         |
+| `UNKNOWN_ERROR`         | An unexpected channel or broker operation failed; `cause` retains the original failure. |
+
+Operational failures in channel construction, requests, publication,
+subscription changes, broker cleanup and broker message handling are wrapped
+once. Broker connection attempts remain best-effort: unavailable Web Locks,
+socket construction failures and aborted connection loops do not reject
+`addBroker()`. Invalid broker frames are ignored; invalid client frames and
+unauthorized requests produce broker `violation` events. Application event
+listeners follow the platform's `EventTarget` error behavior.
+
 ## Tests
 
-- Unit and integration tests in Vitest with 100% statement, branch, function,
-  and line coverage.
-- Browser E2E tests in Chromium, Firefox, WebKit, Mobile Chromium, Mobile
-  Firefox, and Mobile WebKit.
-- `ChannelBroker` runtime tests in Node.js, Bun, Deno, Vercel Edge Runtime, and
-  Cloudflare Workers (`workerd`).
+Vitest: 54 passed, 0 failed, 0 skipped, 0 todo. Result: passed.
+
+### Coverage
+
+| Statements | Branches | Functions | Lines |
+| ---------- | -------- | --------- | ----- |
+| 100%       | 100%     | 100%      | 100%  |
+
+### Browsers
+
+| Browser                             | Result | Passed | Failed | Flaky | Skipped |
+| ----------------------------------- | ------ | ------ | ------ | ----- | ------- |
+| Chromium                            | Passed | 4      | 0      | 0     | 0       |
+| Firefox                             | Failed | 0      | 4      | 0     | 0       |
+| WebKit                              | Passed | 4      | 0      | 0     | 0       |
+| Mobile Chromium (Pixel 7 emulation) | Passed | 4      | 0      | 0     | 0       |
+| Mobile Firefox (touch viewport)     | Failed | 0      | 4      | 0     | 0       |
+| Mobile WebKit (iPhone 15 emulation) | Passed | 4      | 0      | 0     | 0       |
+
+Browser suite: failed.
+
+### Broker runtimes
+
+| Runtime                      | Version                                              | Result |
+| ---------------------------- | ---------------------------------------------------- | ------ |
+| Node.js                      | v24.16.0                                             | Passed |
+| Bun                          | 1.3.10                                               | Passed |
+| Deno                         | deno 2.8.3 (stable, release, x86_64-pc-windows-msvc) | Passed |
+| Vercel Edge Runtime          | 4.0.1                                                | Passed |
+| Cloudflare Workers (workerd) | 1.20261023.1                                         | Passed |
+
+Results are updated automatically after each test run. Browser tests use native Broadcast Channel, Web Locks and WebSocket APIs with a local broker. Mobile projects use emulation; runtime tests cover `ChannelBroker`. “Not run” describes missing test results, not lack of platform support.
 
 ## License
 

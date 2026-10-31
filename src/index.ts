@@ -1,3 +1,5 @@
 export { ActorChannel } from './ActorChannel/index.js'
 export { ChannelBroker } from './ChannelBroker/index.js'
+export { ActorChannelError } from './errors/class.js'
+export type { ActorChannelErrorCode } from './errors/class.js'
 export type * from './types/type.js'

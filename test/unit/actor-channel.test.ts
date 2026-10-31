@@ -1,7 +1,7 @@
 import { decode, decodeMulti, encode } from '@msgpack/msgpack'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ActorChannel } from '../../src/index.js'
-import type { Context } from '../../src/types/index.js'
+import { ActorChannel, ActorChannelError } from '../../src/index.js'
+import type { Context } from '../../src/types/type.js'
 
 type TestContext = Context<string, string, string, string>
 type Client = ActorChannel<string, string, string, string>
@@ -68,9 +68,14 @@ class FakeLockManager {
   throwOnBrokerRequest = 1
   async request(
     name: string,
-    _options: LockOptions,
+    options: LockOptions,
     callback: (lock: Lock | null) => Promise<void>
   ): Promise<void> {
+    if (options.ifAvailable && options.signal)
+      throw new DOMException(
+        'ifAvailable and signal cannot be combined',
+        'NotSupportedError'
+      )
     if (name.includes('actor-channel')) this.brokerRequests++
     await callback(this.available ? ({} as Lock) : null)
     if (
@@ -106,9 +111,93 @@ beforeEach(() => {
   vi.stubGlobal('WebSocket', FakeWebSocket)
 })
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
 
 describe('ActorChannel local behavior', () => {
+  it('uses the supplied storage access handle for its broadcast channel', () => {
+    const factory = vi.fn((name: string) => new FakeBroadcastChannel(name))
+    const client = new ActorChannel({
+      BroadcastChannel: factory,
+    } as unknown as StorageAccessHandle)
+    expect(factory).toHaveBeenCalledWith(
+      '@sovereignbase/actor-channel:broadcast-channel'
+    )
+    expect(broadcast(client)).toBe(FakeBroadcastChannel.instances[0])
+  })
+  it('wraps failures when creating the broadcast channel', () => {
+    const cause = new Error('BroadcastChannel unavailable')
+    vi.stubGlobal(
+      'BroadcastChannel',
+      class {
+        constructor() {
+          throw cause
+        }
+      }
+    )
+    expect(() => new ActorChannel()).toThrow(
+      expect.objectContaining({
+        name: 'ActorChannelError',
+        code: 'UNKNOWN_ERROR',
+        cause,
+      })
+    )
+  })
+
+  it.each(['request', 'publish', 'subscribe', 'unsubscribe'] as const)(
+    'preserves a broadcast failure from %s',
+    (method) => {
+      const client = new ActorChannel<string, string, string, string>()
+      client.subscribe('a')
+      const cause = new Error('Broadcast failed')
+      vi.spyOn(broadcast(client), 'postMessage').mockImplementation(() => {
+        throw cause
+      })
+      const run = () =>
+        method === 'publish'
+          ? client.publish('a', 'out')
+          : method === 'subscribe'
+            ? client.subscribe('b')
+            : client[method]('a')
+      expect(run).toThrow(
+        expect.objectContaining({
+          name: 'ActorChannelError',
+          code: 'UNKNOWN_ERROR',
+          cause,
+        })
+      )
+    }
+  )
+
+  it('does not wrap an existing library error twice', () => {
+    const client = new ActorChannel<string, string, string, string>()
+    const error = new ActorChannelError('UNKNOWN_ERROR', 'Original failure')
+    vi.spyOn(broadcast(client), 'postMessage').mockImplementation(() => {
+      throw error
+    })
+    expect(() => client.publish('a', 'out')).toThrow(error)
+  })
+
+  it('retains the cause if closing a broker fails', () => {
+    const client = new ActorChannel<string, string, string, string>()
+    const socket = new FakeWebSocket('ws://broker')
+    ;(client as any).allBrokers.add(socket)
+    const cause = new Error('Close failed')
+    vi.spyOn(socket, 'close').mockImplementation(() => {
+      throw cause
+    })
+    expect(() => client.emptyBrokers()).toThrow(
+      expect.objectContaining({
+        name: 'ActorChannelError',
+        code: 'UNKNOWN_ERROR',
+        cause,
+      })
+    )
+  })
+
   it('tracks subscriptions and dispatches tab publications', () => {
     const client = new ActorChannel<string, string, string, string>()
     const received: unknown[] = []
@@ -290,6 +379,93 @@ describe('ActorChannel local behavior', () => {
 })
 
 describe('ActorChannel broker behavior', () => {
+  it('empties open and connecting brokers, preserves subscriptions and allows reuse', async () => {
+    locks.throwOnBrokerRequest = Infinity
+    const client = new ActorChannel<string, string, string, string>()
+    client.subscribe('a')
+    const first = client.addBroker('ws://first', true)
+    const second = client.addBroker('ws://second', true)
+    const [open, connecting] = FakeWebSocket.instances
+    open!.open()
+    open!.receive({ kind: 'subscribe', topic: 'a', from: 'server', amount: 2 })
+    expect(client.rpcAvailable).toBe(true)
+    const messages = vi.fn()
+    client.addEventListener('message', messages)
+    const bc = broadcast(client)
+    bc.messages.length = 0
+
+    client.emptyBrokers()
+    expect(client.rpcAvailable).toBe(false)
+    expect(open!.readyState).toBe(FakeWebSocket.CLOSED)
+    expect(connecting!.readyState).toBe(FakeWebSocket.CLOSED)
+    const snapshot = [...bc.messages]
+    // Late browser events from the old sockets cannot revive cleared state.
+    connecting!.open()
+    open!.receive({
+      kind: 'publish',
+      topic: 'a',
+      from: 'server',
+      detail: 'late',
+    })
+    expect(messages).not.toHaveBeenCalled()
+    await Promise.all([first, second])
+    expect(bc.messages).toEqual(snapshot)
+    expect(snapshot).toEqual([
+      { kind: 'internal', detail: { var: 'rpcBrokers', prev: 1, count: 0 } },
+    ])
+    client.emptyBrokers()
+    const next = client.addBroker('ws://first', true)
+    const replacement = FakeWebSocket.instances.at(-1)!
+    replacement.open()
+    expect(contexts(replacement)).toEqual([
+      { kind: 'subscribe', topic: 'a', from: 'client' },
+    ])
+    expect(client.rpcAvailable).toBe(true)
+    bc.receive({ kind: 'publish', topic: 'a', from: 'client', detail: 'local' })
+    expect(messages.mock.calls[0]![0].detail).toEqual(['a', 'local'])
+    client.emptyBrokers()
+    await next
+  })
+
+  it('cancels the retry delay without acquiring another lock', async () => {
+    vi.useFakeTimers()
+    locks.available = false
+    locks.throwOnBrokerRequest = Infinity
+    const client = new ActorChannel<string, string, string, string>()
+    const running = client.addBroker('ws://broker')
+    await vi.advanceTimersByTimeAsync(0)
+    client.emptyBrokers()
+    await running
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(locks.brokerRequests).toBe(1)
+  })
+
+  it('ignores a lock callback delivered after its connection loop was aborted', async () => {
+    const client = new ActorChannel<string, string, string, string>()
+    vi.spyOn(locks, 'request').mockImplementationOnce(
+      async (_name, _options, callback) => {
+        client.emptyBrokers()
+        await callback({} as Lock)
+      }
+    )
+    await client.addBroker('ws://broker')
+    expect(FakeWebSocket.instances).toHaveLength(0)
+  })
+
+  it('handles cancellation during retry listener registration', async () => {
+    locks.available = false
+    locks.throwOnBrokerRequest = Infinity
+    const client = new ActorChannel<string, string, string, string>()
+    const signal = (client as any).brokerController.signal as AbortSignal
+    const add = signal.addEventListener.bind(signal)
+    vi.spyOn(signal, 'addEventListener').mockImplementation((...args) => {
+      client.emptyBrokers()
+      add(...args)
+    })
+    await client.addBroker('ws://broker')
+    expect(locks.brokerRequests).toBe(1)
+  })
+
   it('rejects invalid broker input and unavailable locks', async () => {
     const client = new ActorChannel<string, string, string, string>()
     await client.addBroker(null as unknown as string)

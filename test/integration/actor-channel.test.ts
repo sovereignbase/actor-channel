@@ -1,11 +1,11 @@
 import { decode, decodeMulti, encode } from '@msgpack/msgpack'
-import { describe, expect, it, vi } from 'vitest'
-import { ChannelBroker } from '../../src/index.js'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ActorChannelError, ChannelBroker } from '../../src/index.js'
 import type {
   ActorChannelPair,
   ChannelAttachment,
   Context,
-} from '../../src/types/index.js'
+} from '../../src/types/type.js'
 
 type TestContext = Context<string, { value: number }, string, string>
 const message = (ctx: unknown): ArrayBuffer => {
@@ -26,7 +26,103 @@ const decoded = (channel: TestChannel): TestContext[] =>
     ([data]) => decodeMulti(data)[Symbol.iterator]().next().value as TestContext
   )
 
+afterEach(() => vi.unstubAllGlobals())
+
 describe('ChannelBroker', () => {
+  it('preserves failures when an RPC handler responds asynchronously', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    broker.addChannel(channel, { rpcEnabled: true })
+    let respond!: (response: string) => void
+    broker.addEventListener('request', (event) => {
+      respond = event.detail[1]
+    })
+    broker.handleMessage(
+      channel,
+      message({ kind: 'request', id: 'rpc', detail: 'request' })
+    )
+    const cause = new Error('Response transport failed')
+    channel.send.mockImplementation(() => {
+      throw cause
+    })
+    expect(() => respond('reply')).toThrow(
+      expect.objectContaining({
+        name: 'ActorChannelError',
+        code: 'UNKNOWN_ERROR',
+        cause,
+      })
+    )
+  })
+  it('routes RPC in runtimes without CustomEvent or a WebSocket global', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    vi.stubGlobal('CustomEvent', undefined)
+    vi.stubGlobal('WebSocket', undefined)
+    broker.addChannel(channel, { rpcEnabled: true })
+    broker.addEventListener('request', (event) => event.detail[1]('response'))
+    broker.handleMessage(
+      channel,
+      message({ kind: 'request', id: 'rpc', detail: 'request' })
+    )
+    expect(decoded(channel)).toEqual([
+      { kind: 'response', id: 'rpc', detail: 'response' },
+    ])
+  })
+  it('preserves duplicate registration as a structured error', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    broker.addChannel(channel)
+    expect(() => broker.addChannel(channel)).toThrow(
+      expect.objectContaining({
+        name: 'ActorChannelError',
+        code: 'CHANNEL_ALREADY_ADDED',
+      })
+    )
+  })
+
+  it('wraps unexpected attachment failures', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    const cause = new Error('Attachment unavailable')
+    expect(() =>
+      broker.addChannel(channel, {
+        get rpcEnabled(): boolean {
+          throw cause
+        },
+      })
+    ).toThrow(expect.objectContaining({ code: 'UNKNOWN_ERROR', cause }))
+    broker.addChannel(channel, Object.freeze({ authenticated: false }))
+    expect(() => broker.markAuthenticated(channel)).toThrow(ActorChannelError)
+  })
+
+  it('retains transport failures through nested subscription operations', () => {
+    const broker = new ChannelBroker<string, unknown, string, string>()
+    const channel = new TestChannel()
+    broker.addChannel(channel, { topics: new Set(['a']) })
+    const cause = new Error('Send failed')
+    channel.send.mockImplementation(() => {
+      throw cause
+    })
+    expect(() =>
+      broker.handleMessage(
+        channel,
+        message({
+          kind: 'publish',
+          topic: 'a',
+          from: 'client',
+          detail: 'out',
+        })
+      )
+    ).toThrow(expect.objectContaining({ code: 'UNKNOWN_ERROR', cause }))
+    expect(() => broker.deleteChannel(channel)).toThrow(
+      expect.objectContaining({
+        name: 'ActorChannelError',
+        code: 'UNKNOWN_ERROR',
+        cause,
+      })
+    )
+  })
+
   it('reports malformed messages and unauthorized RPC requests', () => {
     const broker = new ChannelBroker<string, unknown, string, string>()
     const channel = new TestChannel()
